@@ -427,7 +427,6 @@ cmd['issue.get'] = async (client, pos, opts) => {
       parent: parent ? (parent as any).identifier : null,
       team: team ? (team as any).key : null,
       project: project ? (project as any).name : null,
-      url: issue.url,
       created: shortDate(issue.createdAt),
       updated: shortDate(issue.updatedAt),
     });
@@ -610,7 +609,6 @@ cmd['project.get'] = async (client, pos, opts) => {
       lead: lead ? (lead as any).name : null,
       description: p.description,
       startDate: p.startDate, targetDate: p.targetDate,
-      url: p.url, slugId: p.slugId,
       created: shortDate(p.createdAt),
       updated: shortDate(p.updatedAt),
     });
@@ -698,7 +696,6 @@ cmd['document.get'] = async (client, pos, opts) => {
       title: doc.title, icon: doc.icon,
       project: project ? (project as any).name : null,
       creator: creator ? (creator as any).name : null,
-      url: doc.url, slugId: doc.slugId,
       created: shortDate(doc.createdAt),
     });
     outMd(fm, doc.content);
@@ -755,7 +752,6 @@ cmd['initiative.get'] = async (client, pos, opts) => {
       name: init.name, status: init.status,
       owner: owner ? (owner as any).name : null,
       targetDate: init.targetDate,
-      url: init.url,
       created: shortDate(init.createdAt),
       updated: shortDate(init.updatedAt),
     });
@@ -877,7 +873,7 @@ cmd['project-update.get'] = async (client, pos, opts) => {
 
   if (oBool(opts, 'md')) {
     const fm = stripEmpty({
-      health: u.health, url: u.url,
+      health: u.health,
       created: shortDate(u.createdAt),
     });
     outMd(fm, u.body);
