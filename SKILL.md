@@ -19,15 +19,14 @@ CLI tool wrapping `@linear/sdk` for Linear issue tracking.
 
 ## Output Format
 
-- **All commands** output minified JSON by default. `stripEmpty` omits null, empty string, and empty array fields.
-- **Get commands** support `--md` for markdown+frontmatter output — **STRONGLY preferred** over JSON when reading issues/docs. Saves 20-50% on token usage:
+- **Get commands** (issue, project, document, initiative, project-update, milestone) default to **markdown+frontmatter**:
   - YAML frontmatter with metadata (state flattened to name, parent flattened to identifier, dates shortened to YYYY-MM-DD)
   - Markdown body with description/content
-  - Comments as `<comment author="Name" date="YYYY-MM-DD">body</comment>` XML tags
-  - Supported on: `issue get`, `project get`, `document get`, `initiative get`, `project-update get`, `milestone get`
-- **List commands** return a bare JSON array. If paginated: `{"nodes":[...],"pageInfo":{"endCursor":"..."}}`.
-- **Create commands** return `{"success":true,"identifier":"SM-123","url":"..."}`.
-- **Update/delete commands** return `{"success":true}`.
+  - Comments as nested `<comment>`/`<reply>` XML tags with author and date attributes
+  - Use `--json` to get minified JSON instead
+- **Simple get commands** (team, user, status, attachment) output minified JSON
+- **List commands** return minified JSON array. If paginated: `{"nodes":[...],"pageInfo":{"endCursor":"..."}}`. `stripEmpty` omits null/empty fields.
+- **Write commands** (create/update/delete) return minified JSON: `{"success":true,"identifier":"SM-123","url":"..."}`
 
 ## Identifier Resolution
 
@@ -48,7 +47,7 @@ Use `none` to clear nullable fields (assignee, project, parent).
 ### Issues
 ```
 lt issue list [--team SM] [--assignee me] [--state started] [--project "Name"] [--label "Bug"] [--query "text"] [--parent SM-100] [--cycle current] [--created-after 2026-01-01] [--updated-after 2026-01-01] [--limit 50] [--cursor X] [--include-archived]
-lt issue get SM-123 [--md] [--include-comments] [--include-relations]
+lt issue get SM-123 [--json] [--include-comments] [--include-relations]
 lt issue create --title "Title" [--team SM] [--description "..."] [--state "Planned"] [--assignee me] [--priority 2] [--label "Bug"] [--label "UI"] [--project "Name"] [--parent SM-100] [--cycle current] [--milestone "M1"] [--estimate 3] [--due-date 2026-03-01]
 lt issue update SM-123 [--title "New"] [--state "In Progress"] [--assignee me] [--priority 1] [--label "Bug"] [--add-label "UI"] [--remove-label "Old"] [--project "Name"] [--due-date 2026-03-01]
 lt issue delete SM-123
@@ -70,7 +69,7 @@ lt label create --name "New Label" [--team SM] [--color "#eb5757"] [--descriptio
 ### Projects
 ```
 lt project list [--status started] [--member me] [--query "Name"] [--initiative "Init"] [--limit 50]
-lt project get "Project Name" [--md] [--include-milestones]
+lt project get "Project Name" [--json] [--include-milestones]
 lt project create --name "Name" --team SM [--description "..."] [--lead me] [--priority 2] [--start-date 2026-01-01] [--target-date 2026-06-01] [--state planned]
 lt project update "Name" [--name "New"] [--description "..."] [--lead me] [--state started]
 ```
@@ -78,7 +77,7 @@ lt project update "Name" [--name "New"] [--description "..."] [--lead me] [--sta
 ### Project Updates
 ```
 lt project-update list [--project "Name"]
-lt project-update get <id> [--md]
+lt project-update get <id> [--json]
 lt project-update create --project "Name" --body "Update text" [--health onTrack|atRisk|offTrack]
 lt project-update update <id> [--body "New"] [--health atRisk]
 ```
@@ -86,7 +85,7 @@ lt project-update update <id> [--body "New"] [--health atRisk]
 ### Documents
 ```
 lt document list [--project "Name"] [--query "text"] [--initiative "Init"]
-lt document get <id> [--md]
+lt document get <id> [--json]
 lt document create --title "Title" [--project "Name"] [--content "Markdown..."] [--icon "emoji"]
 lt document update <id> [--title "New"] [--content "Updated..."]
 ```
@@ -94,7 +93,7 @@ lt document update <id> [--title "New"] [--content "Updated..."]
 ### Initiatives
 ```
 lt initiative list [--status active] [--query "Name"]
-lt initiative get "Name" [--md] [--include-projects]
+lt initiative get "Name" [--json] [--include-projects]
 lt initiative create --name "Name" [--description "..."] [--status planned|active|completed] [--owner me] [--target-date 2026-12-31]
 lt initiative update "Name" [--status active] [--owner me]
 ```
@@ -110,7 +109,7 @@ lt initiative-update delete <id>
 ### Milestones
 ```
 lt milestone list --project "Name"
-lt milestone get "Milestone Name" [--md] [--project "Name"]
+lt milestone get "Milestone Name" [--json] [--project "Name"]
 lt milestone create --project "Name" --name "M1" [--description "..."] [--target-date 2026-03-01]
 lt milestone update "M1" [--project "Name"] [--name "New"] [--target-date 2026-04-01]
 ```
