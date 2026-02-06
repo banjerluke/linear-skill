@@ -13,7 +13,7 @@ description: >
 
 CLI tool wrapping `@linear/sdk` for Linear issue tracking.
 
-**Invocation:** `${CLAUDE_PLUGIN_ROOT}/skills/linear/linear.ts` (executable with shebang, no `node` prefix needed)
+**Invocation:** `${SKILL_DIR}/linear.ts` (executable with shebang, no `node` prefix needed)
 
 **Config:** Reads `.linear.toml` from CWD for defaults (`team_id`, `workspace`). Auth from `~/.config/linear/credentials.toml`.
 
@@ -145,7 +145,7 @@ lt graphql query --query '{ viewer { id name } }' [--variables '{"key":"value"}'
 
 ## Notes
 
-- `lt` = `${CLAUDE_PLUGIN_ROOT}/skills/linear/linear.ts`
+- `lt` = `${SKILL_DIR}/linear.ts`
 - Priority: 0=None, 1=Urgent, 2=High, 3=Normal, 4=Low
 - Project states: `planned`, `started`, `paused`, `completed`, `canceled`, `backlog`
 - Initiative statuses: `planned`, `active`, `completed`, `paused`
