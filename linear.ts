@@ -3,9 +3,11 @@
 // Usage: <this-file> <resource> <action> [options]
 
 import { LinearClient } from '@linear/sdk';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
+import { createServer } from 'node:http';
+import { randomBytes } from 'node:crypto';
 
 // ═══════════════════════════════ Helpers ═══════════════════════════════
 
@@ -58,16 +60,76 @@ function oInt(opts: Opts, key: string): number | undefined {
 
 // ═══════════════════════════════ Auth & Config ═══════════════════════════════
 
-function getApiKey(): string {
-  if (process.env.LINEAR_API_KEY) return process.env.LINEAR_API_KEY;
-  const p = join(homedir(), '.config', 'linear', 'credentials.toml');
-  if (!existsSync(p)) die('No API key. Set LINEAR_API_KEY or run `linear auth`.');
-  const c = readFileSync(p, 'utf-8');
+type Auth = { apiKey: string } | { accessToken: string };
+
+const CREDENTIALS_PATH = join(homedir(), '.config', 'linear', 'credentials.toml');
+
+function readSection(content: string, name: string): Record<string, string> {
+  const start = content.indexOf(`[${name}]`);
+  if (start === -1) return {};
+  const afterHeader = content.indexOf('\n', start);
+  if (afterHeader === -1) return {};
+  const nextSection = content.indexOf('\n[', afterHeader);
+  const block = nextSection === -1 ? content.slice(afterHeader) : content.slice(afterHeader, nextSection);
+  const kv: Record<string, string> = {};
+  for (const m of block.matchAll(/^(\w+)\s*=\s*"(.+?)"/gm)) kv[m[1]] = m[2];
+  return kv;
+}
+
+function writeCredentials(workspace: string, fields: Record<string, string>): void {
+  const dir = join(homedir(), '.config', 'linear');
+  mkdirSync(dir, { recursive: true });
+  const lines = [`default = "${workspace}"`, '', `[${workspace}]`];
+  for (const [k, v] of Object.entries(fields)) lines.push(`${k} = "${v}"`);
+  writeFileSync(CREDENTIALS_PATH, lines.join('\n') + '\n');
+}
+
+async function refreshAccessToken(refreshToken: string, clientId: string, clientSecret: string): Promise<{ access_token: string; refresh_token: string; expires_in: number }> {
+  const res = await fetch('https://api.linear.app/oauth/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: refreshToken, client_id: clientId, client_secret: clientSecret }),
+  });
+  if (!res.ok) die(`Token refresh failed: ${res.status} ${await res.text()}`);
+  return res.json() as any;
+}
+
+function getAuth(): Auth {
+  if (process.env.LINEAR_API_KEY) return { apiKey: process.env.LINEAR_API_KEY };
+  if (!existsSync(CREDENTIALS_PATH)) die('Not authenticated. Run `linear auth login --client-id <id> --client-secret <secret>` or set LINEAR_API_KEY.');
+  const c = readFileSync(CREDENTIALS_PATH, 'utf-8');
   const ws = c.match(/^default\s*=\s*"(.+?)"/m)?.[1];
   if (!ws) die('Cannot parse default workspace from credentials.toml');
+  const section = readSection(c, ws);
+  // Section-based OAuth credentials
+  if (section.access_token) {
+    return { accessToken: section.access_token };
+  }
+  // Legacy flat format: workspace = "api_key"
   const key = c.match(new RegExp(`^${ws}\\s*=\\s*"(.+?)"`, 'm'))?.[1];
-  if (!key) die(`No API key for workspace "${ws}"`);
-  return key;
+  if (!key) die(`No credentials for workspace "${ws}"`);
+  return { apiKey: key };
+}
+
+async function getAuthWithRefresh(): Promise<Auth> {
+  const auth = getAuth();
+  if ('apiKey' in auth) return auth;
+  // Check if OAuth token needs refresh
+  const c = readFileSync(CREDENTIALS_PATH, 'utf-8');
+  const ws = c.match(/^default\s*=\s*"(.+?)"/m)?.[1]!;
+  const section = readSection(c, ws);
+  if (section.token_expiry) {
+    const expiry = new Date(section.token_expiry);
+    // Refresh if token expires within 5 minutes
+    if (expiry.getTime() - Date.now() < 5 * 60 * 1000) {
+      if (!section.refresh_token || !section.client_id || !section.client_secret) die('Cannot refresh token: missing refresh_token, client_id, or client_secret in credentials');
+      const tokens = await refreshAccessToken(section.refresh_token, section.client_id, section.client_secret);
+      const newExpiry = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
+      writeCredentials(ws, { ...section, access_token: tokens.access_token, refresh_token: tokens.refresh_token, token_expiry: newExpiry });
+      return { accessToken: tokens.access_token };
+    }
+  }
+  return auth;
 }
 
 function getConfig(): Config {
@@ -1070,13 +1132,103 @@ cmd['graphql.query'] = async (client, _pos, opts) => {
   out(result, true);
 };
 
+// ─── Auth ───
+
+async function authLogin(opts: Opts): Promise<void> {
+  const clientId = o(opts, 'client-id');
+  const clientSecret = o(opts, 'client-secret');
+  if (!clientId || !clientSecret) die('--client-id and --client-secret required');
+
+  const state = randomBytes(16).toString('hex');
+  const port = oInt(opts, 'port') ?? 41549;
+  const redirectUri = `http://localhost:${port}/callback`;
+  const authorizeUrl = `https://linear.app/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=read,write&actor=app&state=${state}`;
+
+  console.error(`\nOpen this URL in your browser to authorize:\n\n  ${authorizeUrl}\n\nWaiting for callback on port ${port}...`);
+
+  const code = await new Promise<string>((resolve, reject) => {
+    const timeout = setTimeout(() => { srv.close(); reject(new Error('Timed out waiting for authorization (5 min)')); }, 5 * 60 * 1000);
+    const srv = createServer((req, res) => {
+      const url = new URL(req.url!, `http://localhost:${port}`);
+      if (url.pathname !== '/callback') { res.writeHead(404); res.end(); return; }
+      const err = url.searchParams.get('error');
+      if (err) { res.writeHead(200); res.end('Authorization denied: ' + err); clearTimeout(timeout); srv.close(); reject(new Error('Authorization denied: ' + err)); return; }
+      const returnedState = url.searchParams.get('state');
+      if (returnedState !== state) { res.writeHead(400); res.end('State mismatch'); clearTimeout(timeout); srv.close(); reject(new Error('State mismatch')); return; }
+      const authCode = url.searchParams.get('code');
+      if (!authCode) { res.writeHead(400); res.end('No code'); clearTimeout(timeout); srv.close(); reject(new Error('No authorization code received')); return; }
+      res.writeHead(200, { 'Content-Type': 'text/html' });
+      res.end('<h2>Authorization successful!</h2><p>You can close this tab.</p>');
+      clearTimeout(timeout);
+      srv.close();
+      resolve(authCode);
+    });
+    srv.listen(port);
+  });
+
+  // Exchange code for tokens
+  const tokenRes = await fetch('https://api.linear.app/oauth/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ grant_type: 'authorization_code', code, redirect_uri: redirectUri, client_id: clientId, client_secret: clientSecret }),
+  });
+  if (!tokenRes.ok) die(`Token exchange failed: ${tokenRes.status} ${await tokenRes.text()}`);
+  const tokens = await tokenRes.json() as { access_token: string; refresh_token?: string; expires_in: number };
+
+  // Fetch workspace slug
+  const gqlRes = await fetch('https://api.linear.app/graphql', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${tokens.access_token}` },
+    body: JSON.stringify({ query: '{ organization { urlKey name } }' }),
+  });
+  const gql = await gqlRes.json() as any;
+  const workspace = gql.data?.organization?.urlKey || 'default';
+  const orgName = gql.data?.organization?.name || workspace;
+
+  const expiry = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
+  const fields: Record<string, string> = { access_token: tokens.access_token, token_expiry: expiry, client_id: clientId, client_secret: clientSecret };
+  if (tokens.refresh_token) fields.refresh_token = tokens.refresh_token;
+  writeCredentials(workspace, fields);
+
+  console.error(`\nAuthenticated with workspace "${orgName}" (${workspace}).`);
+  console.error(`Credentials saved to ${CREDENTIALS_PATH}`);
+  out({ success: true, workspace, organization: orgName }, false);
+}
+
+function authStatus(): void {
+  if (process.env.LINEAR_API_KEY) {
+    out({ type: 'api_key', source: 'LINEAR_API_KEY env var' }, false);
+    return;
+  }
+  if (!existsSync(CREDENTIALS_PATH)) die('Not authenticated. Run `linear auth login`.');
+  const c = readFileSync(CREDENTIALS_PATH, 'utf-8');
+  const ws = c.match(/^default\s*=\s*"(.+?)"/m)?.[1];
+  if (!ws) die('Cannot parse credentials.toml');
+  const section = readSection(c, ws);
+  if (section.access_token) {
+    const expiry = section.token_expiry ? new Date(section.token_expiry) : null;
+    const expired = expiry ? expiry.getTime() < Date.now() : false;
+    out({ type: 'oauth', workspace: ws, tokenExpiry: section.token_expiry || null, expired, hasRefreshToken: !!section.refresh_token }, false);
+  } else {
+    out({ type: 'api_key', workspace: ws, source: 'credentials.toml (legacy)' }, false);
+  }
+}
+
 // ═══════════════════════════════ Main ═══════════════════════════════
 
 async function main() {
   const { resource, action, pos, opts } = parseArgs();
-  const apiKey = getApiKey();
+
+  // Auth commands don't need an existing token
+  if (resource === 'auth') {
+    if (action === 'login') return authLogin(opts);
+    if (action === 'status') return authStatus();
+    die('Unknown auth action. Available: login, status');
+  }
+
+  const auth = await getAuthWithRefresh();
   const config = getConfig();
-  const client = new LinearClient({ apiKey });
+  const client = new LinearClient(auth);
 
   const key = `${resource}.${action}`;
   const handler = cmd[key];

@@ -17,6 +17,26 @@ CLI tool wrapping `@linear/sdk` for Linear issue tracking.
 
 **Config:** Reads `.linear.toml` from CWD for defaults (`team_id`, `workspace`). Auth from `~/.config/linear/credentials.toml`.
 
+## Authentication
+
+Supports two auth methods:
+
+1. **OAuth (recommended)** — Actions attributed to the app, not your personal account. Uses `actor=app` for a separate agent identity.
+2. **API Key (legacy)** — Set `LINEAR_API_KEY` env var or use flat credentials.toml format.
+
+### OAuth Setup
+1. Go to Linear Settings → API → OAuth Applications → New
+2. Set callback URL to `http://localhost` (any port is accepted)
+3. Run: `lt auth login --client-id <id> --client-secret <secret>`
+4. Open the printed URL in your browser and authorize
+5. Tokens are saved to `~/.config/linear/credentials.toml` with automatic refresh
+
+### Auth Commands
+```
+lt auth login --client-id <id> --client-secret <secret>
+lt auth status
+```
+
 ## Output Format
 
 - **Get commands** (issue, project, document, initiative, project-update, milestone) default to **markdown+frontmatter**:
