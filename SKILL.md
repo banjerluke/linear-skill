@@ -13,7 +13,7 @@ description: >
 
 CLI tool wrapping `@linear/sdk` for Linear issue tracking.
 
-**Invocation:** `${SKILL_DIR}/linear.ts` (executable with shebang, no `node` prefix needed)
+**Invocation:** `~/.claude/skills/linear/linear.ts` (executable with shebang, no `node` prefix needed)
 
 **Config:** Reads `.linear.toml` from CWD for defaults (`team_id`, `workspace`). Auth from `~/.config/linear/credentials.toml`.
 
@@ -145,7 +145,7 @@ lt graphql query --query '{ viewer { id name } }' [--variables '{"key":"value"}'
 
 ## Notes
 
-- `lt` = `${SKILL_DIR}/linear.ts`
+- `lt` = `~/.claude/skills/linear/linear.ts`
 - Priority: 0=None, 1=Urgent, 2=High, 3=Normal, 4=Low
 - Project states: `planned`, `started`, `paused`, `completed`, `canceled`, `backlog`
 - Initiative statuses: `planned`, `active`, `completed`, `paused`
@@ -159,3 +159,4 @@ lt graphql query --query '{ viewer { id name } }' [--variables '{"key":"value"}'
 - **Starting work**: `lt issue update SM-123 --state "In Progress"`
 - **Code complete**: Do NOT mark as "Done" yet. Wait for user confirmation.
 - **User confirms**: `lt issue update SM-123 --state "Done"` + `lt comment create --issue SM-123 --body "Done: [what was done]"`
+- **All comments** must be prefixed with `**Claude:**` so they are identifiable as AI-authored
