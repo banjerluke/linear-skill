@@ -22,7 +22,8 @@ CLI tool wrapping `@linear/sdk` for Linear issue tracking.
 Supports two auth methods:
 
 1. **OAuth (recommended)** — Actions attributed to the app, not your personal account. Uses `actor=app` for a separate agent identity.
-2. **API Key (legacy)** — Set `LINEAR_API_KEY` env var or use flat credentials.toml format.
+2. **Env Token** — Set `LINEAR_ACCESS_TOKEN` (OAuth access token) or `LINEAR_API_KEY` (API token).
+   - If `LINEAR_API_KEY` starts with `lin_oaut`, the tool treats it as an OAuth access token automatically.
 
 ### OAuth Setup
 1. Go to Linear Settings → API → OAuth Applications → New
@@ -166,6 +167,7 @@ lt graphql query --query '{ viewer { id name } }' [--variables '{"key":"value"}'
 ## Notes
 
 - `lt` = `~/.claude/skills/linear/linear.ts`
+- Env auth precedence: `LINEAR_ACCESS_TOKEN` first, then `LINEAR_API_KEY`
 - Priority: 0=None, 1=Urgent, 2=High, 3=Normal, 4=Low
 - Project states: `planned`, `started`, `paused`, `completed`, `canceled`, `backlog`
 - Initiative statuses: `planned`, `active`, `completed`, `paused`
@@ -179,4 +181,3 @@ lt graphql query --query '{ viewer { id name } }' [--variables '{"key":"value"}'
 - **Starting work**: `lt issue update SM-123 --state "In Progress"`
 - **Code complete**: Do NOT mark as "Done" yet. Wait for user confirmation.
 - **User confirms**: `lt issue update SM-123 --state "Done"` + `lt comment create --issue SM-123 --body "Done: [what was done]"`
-- **All comments** must be prefixed with `**Claude:**` so they are identifiable as AI-authored

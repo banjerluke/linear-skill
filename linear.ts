@@ -94,9 +94,25 @@ async function refreshAccessToken(refreshToken: string, clientId: string, client
   return res.json() as any;
 }
 
+function looksLikeOAuthToken(token: string): boolean {
+  return token.startsWith('lin_oaut');
+}
+
+function getEnvAuth(): Auth | null {
+  const accessToken = process.env.LINEAR_ACCESS_TOKEN?.trim();
+  if (accessToken) return { accessToken };
+
+  const token = process.env.LINEAR_API_KEY?.trim();
+  if (!token) return null;
+  if (looksLikeOAuthToken(token)) return { accessToken: token };
+  return { apiKey: token };
+}
+
 function getAuth(): Auth {
-  if (process.env.LINEAR_API_KEY) return { apiKey: process.env.LINEAR_API_KEY };
-  if (!existsSync(CREDENTIALS_PATH)) die('Not authenticated. Run `linear auth login --client-id <id> --client-secret <secret>` or set LINEAR_API_KEY.');
+  const envAuth = getEnvAuth();
+  if (envAuth) return envAuth;
+
+  if (!existsSync(CREDENTIALS_PATH)) die('Not authenticated. Run `linear auth login --client-id <id> --client-secret <secret>` or set LINEAR_API_KEY / LINEAR_ACCESS_TOKEN.');
   const c = readFileSync(CREDENTIALS_PATH, 'utf-8');
   const ws = c.match(/^default\s*=\s*"(.+?)"/m)?.[1];
   if (!ws) die('Cannot parse default workspace from credentials.toml');
@@ -105,13 +121,17 @@ function getAuth(): Auth {
   if (section.access_token) {
     return { accessToken: section.access_token };
   }
-  // Legacy flat format: workspace = "api_key"
-  const key = c.match(new RegExp(`^${ws}\\s*=\\s*"(.+?)"`, 'm'))?.[1];
-  if (!key) die(`No credentials for workspace "${ws}"`);
-  return { apiKey: key };
+  // Legacy flat format: workspace = "token"
+  const token = c.match(new RegExp(`^${ws}\\s*=\\s*"(.+?)"`, 'm'))?.[1];
+  if (!token) die(`No credentials for workspace "${ws}"`);
+  if (looksLikeOAuthToken(token)) return { accessToken: token };
+  return { apiKey: token };
 }
 
 async function getAuthWithRefresh(): Promise<Auth> {
+  const envAuth = getEnvAuth();
+  if (envAuth) return envAuth;
+
   const auth = getAuth();
   if ('apiKey' in auth) return auth;
   // Check if OAuth token needs refresh
@@ -1196,10 +1216,19 @@ async function authLogin(opts: Opts): Promise<void> {
 }
 
 function authStatus(): void {
-  if (process.env.LINEAR_API_KEY) {
-    out({ type: 'api_key', source: 'LINEAR_API_KEY env var' }, false);
+  const accessToken = process.env.LINEAR_ACCESS_TOKEN?.trim();
+  if (accessToken) {
+    out({ type: 'oauth', source: 'LINEAR_ACCESS_TOKEN env var', hasRefreshToken: false }, false);
     return;
   }
+
+  const envToken = process.env.LINEAR_API_KEY?.trim();
+  if (envToken) {
+    if (looksLikeOAuthToken(envToken)) out({ type: 'oauth', source: 'LINEAR_API_KEY env var (oauth access token)', hasRefreshToken: false }, false);
+    else out({ type: 'api_key', source: 'LINEAR_API_KEY env var' }, false);
+    return;
+  }
+
   if (!existsSync(CREDENTIALS_PATH)) die('Not authenticated. Run `linear auth login`.');
   const c = readFileSync(CREDENTIALS_PATH, 'utf-8');
   const ws = c.match(/^default\s*=\s*"(.+?)"/m)?.[1];
