@@ -395,7 +395,7 @@ const fComment = async (n: any) => {
   const parent = await safe(() => n.parent);
   return stripEmpty({ id: n.id, parentId: parent ? (parent as any).id : null, body: n.body, createdAt: n.createdAt, url: n.url });
 };
-const fLabel = (n: any) => stripEmpty({ name: n.name, color: n.color, description: n.description });
+const fLabel = async (n: any) => { const parent = await safe(() => n.parent); return stripEmpty({ name: n.name, color: n.color, description: n.description, parent: parent?.name ?? null }); };
 const fTeam = (n: any) => stripEmpty({ key: n.key, name: n.name, description: n.description });
 const fUser = (n: any) => stripEmpty({ name: n.name, displayName: n.displayName, email: n.email, active: n.active });
 const fMilestone = (n: any) => stripEmpty({ id: n.id, name: n.name, description: n.description, targetDate: n.targetDate });
@@ -645,7 +645,7 @@ cmd['label.list'] = async (client, _pos, opts) => {
   if (o(opts, 'team')) filter.team = { key: { eq: o(opts, 'team') } };
   if (o(opts, 'name')) filter.name = { containsIgnoreCase: o(opts, 'name') };
   const r = await client.issueLabels({ filter, ...pagVars(opts) });
-  outList(r.nodes.map(fLabel), r.pageInfo);
+  outList(await Promise.all(r.nodes.map(fLabel)), r.pageInfo);
 };
 
 cmd['label.create'] = async (client, _pos, opts, config) => {
