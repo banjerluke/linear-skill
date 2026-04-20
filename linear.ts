@@ -44,6 +44,106 @@ async function safe<T>(fn: () => T | Promise<T>): Promise<T | null> {
 
 const isUUID = (s: string) => /^[0-9a-f]{8}-/.test(s);
 
+// ═══════════════════════════════ Hashline ═══════════════════════════════
+
+const HASH_ALPHA = 'ZPMQVRWSNKTXJBYH';
+
+function lineHash(line: string, idx: number): string {
+  let input = line.trimEnd();
+  if (!/\S/.test(input)) input = `\0${idx}`;
+  let h = 0x811c9dc5;
+  for (let i = 0; i < input.length; i++) {
+    h ^= input.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  const byte = (h >>> 0) & 0xff;
+  return HASH_ALPHA[byte >> 4] + HASH_ALPHA[byte & 0xf];
+}
+
+function formatHashlines(text: string): string {
+  const lines = text.split('\n');
+  const width = String(lines.length).length;
+  return lines.map((line, i) => {
+    const num = String(i + 1).padStart(width);
+    const hash = lineHash(line, i);
+    return `${num}#${hash}:${line}`;
+  }).join('\n');
+}
+
+type EditOp = {
+  op: 'replace' | 'append' | 'prepend' | 'delete';
+  lineNum: number;
+  hash: string;
+  lines: string[];
+};
+
+function parseEdits(text: string): EditOp[] {
+  const edits: EditOp[] = [];
+  const raw = text.split('\n');
+  let i = 0;
+  while (i < raw.length) {
+    const line = raw[i];
+    if (!line.trim()) { i++; continue; }
+    const m = line.match(/^(replace|append|prepend|delete)\s+(\d+)#([A-Z]{2})(?::(.*))?$/);
+    if (!m) die(`Invalid edit line ${i + 1}: ${JSON.stringify(line)}`);
+    const [, op, num, hash, rest] = m;
+    const lineNum = parseInt(num);
+    let lines: string[];
+    if (rest === '<<<') {
+      // Heredoc: collect until closing >>>
+      const start = i + 1;
+      i++;
+      while (i < raw.length && raw[i] !== '>>>') i++;
+      if (i >= raw.length) die(`Unclosed heredoc starting at line ${start}`);
+      lines = raw.slice(start, i);
+    } else if (rest != null) {
+      lines = [rest];
+    } else {
+      lines = [];
+    }
+    if (op !== 'delete' && lines.length === 0) die(`"${op}" at ${num}#${hash} requires content after :`);
+    edits.push({ op: op as EditOp['op'], lineNum, hash, lines });
+    i++;
+  }
+  if (edits.length === 0) die('No edit operations found');
+  return edits;
+}
+
+function applyEdits(content: string, edits: EditOp[]): string {
+  const lines = content.split('\n');
+
+  // Validate all anchors before applying any edits
+  for (const edit of edits) {
+    const idx = edit.lineNum - 1;
+    if (idx < 0 || idx >= lines.length) die(`Line ${edit.lineNum} out of range (content has ${lines.length} lines)`);
+    const actual = lineHash(lines[idx], idx);
+    if (actual !== edit.hash) die(`Hash mismatch at line ${edit.lineNum}: expected #${edit.hash} but got #${actual}. Current content: ${JSON.stringify(lines[idx])}`);
+  }
+
+  // Sort by line number descending so index shifts don't affect later edits
+  const sorted = [...edits].sort((a, b) => b.lineNum - a.lineNum);
+
+  for (const edit of sorted) {
+    const idx = edit.lineNum - 1;
+    switch (edit.op) {
+      case 'replace':
+        lines.splice(idx, 1, ...edit.lines);
+        break;
+      case 'append':
+        lines.splice(idx + 1, 0, ...edit.lines);
+        break;
+      case 'prepend':
+        lines.splice(idx, 0, ...edit.lines);
+        break;
+      case 'delete':
+        lines.splice(idx, 1);
+        break;
+    }
+  }
+
+  return lines.join('\n');
+}
+
 function o(opts: Opts, key: string): string | undefined {
   const v = opts[key]; return typeof v === 'string' ? v : undefined;
 }
@@ -464,6 +564,53 @@ const cmd: Record<string, H> = {};
 
 // ─── Issues ───
 
+async function resolveIssueMeta(issue: any) {
+  const [state, assignee, team, project, lblC, parent] = await Promise.all([
+    safe(() => issue.state), safe(() => issue.assignee), safe(() => issue.team),
+    safe(() => issue.project), safe(() => issue.labels()), safe(() => issue.parent),
+  ]);
+  const labels = ((lblC as any)?.nodes || []).map((l: any) => l.name);
+  return { state, assignee, team, project, labels, parent };
+}
+
+function issueFullJson(issue: any, meta: Awaited<ReturnType<typeof resolveIssueMeta>>) {
+  const { state, assignee, team, project, labels, parent } = meta;
+  return stripEmpty({
+    id: issue.id, identifier: issue.identifier, title: issue.title,
+    priority: issue.priority || undefined,
+    state: state ? { name: (state as any).name, type: (state as any).type } : null,
+    assignee: assignee ? (assignee as any).name : null,
+    labels, dueDate: issue.dueDate, estimate: issue.estimate || undefined,
+    description: issue.description, branchName: issue.branchName,
+    parent: parent ? { identifier: (parent as any).identifier, title: (parent as any).title } : null,
+    team: team ? (team as any).key : null,
+    project: project ? (project as any).name : null,
+    url: issue.url, createdAt: issue.createdAt, updatedAt: issue.updatedAt,
+  });
+}
+
+function issueFrontmatter(issue: any, meta: Awaited<ReturnType<typeof resolveIssueMeta>>) {
+  const { state, assignee, team, project, labels, parent } = meta;
+  return stripEmpty({
+    identifier: issue.identifier, title: issue.title,
+    priority: issue.priority || undefined,
+    state: state ? (state as any).name : null,
+    assignee: assignee ? (assignee as any).name : null,
+    labels, dueDate: issue.dueDate, estimate: issue.estimate || undefined,
+    branch: issue.branchName,
+    parent: parent ? (parent as any).identifier : null,
+    team: team ? (team as any).key : null,
+    project: project ? (project as any).name : null,
+    created: shortDate(issue.createdAt),
+    updated: shortDate(issue.updatedAt),
+  });
+}
+
+async function fetchComments(client: LinearClient, issueId: string): Promise<string> {
+  const cs = await client.comments({ filter: { issue: { id: { eq: issueId } } } });
+  return cs.nodes.length ? await renderCommentsXml(cs.nodes) : '';
+}
+
 cmd['issue.list'] = async (client, _pos, opts, config) => {
   const filter: any = {};
   const teamKey = o(opts, 'team') || config.team;
@@ -492,60 +639,64 @@ cmd['issue.get'] = async (client, pos, opts) => {
   if (!pos[0]) die('Usage: linear issue get <identifier>');
   const id = await rIssue(client, pos[0]);
   const issue = await client.issue(id);
-  const [state, assignee, team, project, lblC, parent] = await Promise.all([
-    safe(() => issue.state), safe(() => issue.assignee), safe(() => issue.team),
-    safe(() => issue.project), safe(() => issue.labels()), safe(() => issue.parent),
-  ]);
-  const labels = ((lblC as any)?.nodes || []).map((l: any) => l.name);
+  const meta = await resolveIssueMeta(issue);
 
-  if (oBool(opts, 'md')) {
-    const fm = stripEmpty({
-      identifier: issue.identifier, title: issue.title,
-      priority: issue.priority || undefined,
-      state: state ? (state as any).name : null,
-      assignee: assignee ? (assignee as any).name : null,
-      labels, dueDate: issue.dueDate, estimate: issue.estimate || undefined,
-      branch: issue.branchName,
-      parent: parent ? (parent as any).identifier : null,
-      team: team ? (team as any).key : null,
-      project: project ? (project as any).name : null,
-      created: shortDate(issue.createdAt),
-      updated: shortDate(issue.updatedAt),
-    });
-    let comments = '';
-    if (oBool(opts, 'include-comments')) {
-      const cs = await client.comments({ filter: { issue: { id: { eq: id } } } });
-      if (cs.nodes.length) comments = await renderCommentsXml(cs.nodes);
+  if (oBool(opts, 'json')) {
+    const r: any = issueFullJson(issue, meta);
+    if (!oBool(opts, 'no-comments')) {
+      const comments = await client.comments({ filter: { issue: { id: { eq: id } } } });
+      r.comments = await Promise.all(comments.nodes.map(fComment));
     }
-    outMd(fm, issue.description, comments);
+    if (oBool(opts, 'include-relations')) {
+      const gql = await client.client.rawRequest(
+        `query($id:String!){issue(id:$id){relations{nodes{type relatedIssue{id identifier title}}}inverseRelations{nodes{type issue{id identifier title}}}}}`,
+        { id },
+      );
+      r.relations = (gql as any).data?.issue?.relations?.nodes || [];
+      r.inverseRelations = (gql as any).data?.issue?.inverseRelations?.nodes || [];
+    }
+    out(r, true);
     return;
   }
 
-  const r: any = stripEmpty({
-    id: issue.id, identifier: issue.identifier, title: issue.title,
-    priority: issue.priority || undefined,
-    state: state ? { name: (state as any).name, type: (state as any).type } : null,
-    assignee: assignee ? (assignee as any).name : null,
-    labels, dueDate: issue.dueDate, estimate: issue.estimate || undefined,
-    description: issue.description, branchName: issue.branchName,
-    parent: parent ? { identifier: (parent as any).identifier, title: (parent as any).title } : null,
-    team: team ? (team as any).key : null,
-    project: project ? (project as any).name : null,
-    url: issue.url, createdAt: issue.createdAt, updatedAt: issue.updatedAt,
-  });
-  if (oBool(opts, 'include-comments')) {
-    const comments = await client.comments({ filter: { issue: { id: { eq: id } } } });
-    r.comments = await Promise.all(comments.nodes.map(fComment));
+  const fm = issueFrontmatter(issue, meta);
+  const comments = oBool(opts, 'no-comments') ? '' : await fetchComments(client, id);
+  outMd(fm, issue.description, comments);
+};
+
+cmd['issue.read'] = async (client, pos, opts) => {
+  if (!pos[0]) die('Usage: linear issue read <identifier> [--no-comments]');
+  const id = await rIssue(client, pos[0]);
+  const issue = await client.issue(id);
+  const fm = issueFrontmatter(issue, await resolveIssueMeta(issue));
+  const comments = oBool(opts, 'no-comments') ? '' : await fetchComments(client, id);
+  const lines = ['---'];
+  for (const [k, v] of Object.entries(fm)) {
+    if (v === null || v === undefined || v === '' || (Array.isArray(v) && v.length === 0)) continue;
+    lines.push(`${k}: ${yamlVal(v)}`);
   }
-  if (oBool(opts, 'include-relations')) {
-    const gql = await client.client.rawRequest(
-      `query($id:String!){issue(id:$id){relations{nodes{type relatedIssue{id identifier title}}}inverseRelations{nodes{type issue{id identifier title}}}}}`,
-      { id },
-    );
-    r.relations = (gql as any).data?.issue?.relations?.nodes || [];
-    r.inverseRelations = (gql as any).data?.issue?.inverseRelations?.nodes || [];
-  }
-  out(r, true);
+  lines.push('---', '');
+  if (issue.description) lines.push(formatHashlines(issue.description));
+  else lines.push('(empty description)');
+  if (comments) lines.push('', comments);
+  console.log(lines.join('\n'));
+};
+
+cmd['issue.edit'] = async (client, pos, opts) => {
+  if (!pos[0]) die('Usage: linear issue edit <identifier> --edits $\'replace 6#JB:new text\\ndelete 4#KT\'');
+  const editsText = o(opts, 'edits');
+  if (!editsText) die('--edits required (text edit commands)');
+  const edits = parseEdits(editsText);
+
+  const id = await rIssue(client, pos[0]);
+  const issue = await client.issue(id);
+  if (!issue.description) die('Issue has no description to edit');
+
+  const newDescription = applyEdits(issue.description, edits);
+  const p = await client.updateIssue(id, { description: newDescription });
+  if (!p.success) die('Failed to update issue');
+
+  console.log(formatHashlines(newDescription));
 };
 
 cmd['issue.create'] = async (client, _pos, opts, config) => {
@@ -667,9 +818,8 @@ cmd['project.list'] = async (client, _pos, opts) => {
   const filter: any = {};
   if (o(opts, 'team')) {
     const tid = await rTeam(client, o(opts, 'team'), { team: undefined });
-    if (tid) filter.members = { some: { id: { eq: tid } } };
+    if (tid) filter.accessibleTeams = { some: { id: { eq: tid } } };
   }
-  if (o(opts, 'state')) filter.state = { eq: o(opts, 'state') };
   if (o(opts, 'status')) filter.status = { name: { containsIgnoreCase: o(opts, 'status') } };
   if (o(opts, 'member')) filter.members = { some: { id: { eq: await rUser(client, o(opts, 'member')!) } } };
   if (o(opts, 'query')) filter.name = { containsIgnoreCase: o(opts, 'query') };
@@ -684,38 +834,38 @@ cmd['project.get'] = async (client, pos, opts) => {
   const p = await client.project(id);
   const [lead, status] = await Promise.all([safe(() => p.lead), safe(() => p.status)]);
 
-  if (oBool(opts, 'md')) {
-    const fm = stripEmpty({
-      name: p.name, priority: p.priority || undefined,
-      status: status ? (status as any).name : null,
-      lead: lead ? (lead as any).name : null,
-      description: p.description,
-      startDate: p.startDate, targetDate: p.targetDate,
-      created: shortDate(p.createdAt),
-      updated: shortDate(p.updatedAt),
-    });
-    let milestones = '';
+  if (oBool(opts, 'json')) {
+    const r: any = await fProject(p, true);
     if (oBool(opts, 'include-milestones')) {
       const ms = await client.projectMilestones({ filter: { project: { id: { eq: id } } } });
-      if (ms.nodes.length) {
-        milestones = '## Milestones\n\n' + ms.nodes.map((m: any) => {
-          let line = `- **${m.name}**`;
-          if (m.targetDate) line += ` (${String(m.targetDate).slice(0, 10)})`;
-          if (m.description) line += ` — ${m.description}`;
-          return line;
-        }).join('\n');
-      }
+      r.milestones = ms.nodes.map(fMilestone);
     }
-    outMd(fm, p.content, milestones);
+    out(r, true);
     return;
   }
 
-  const r: any = await fProject(p, true);
+  const fm = stripEmpty({
+    name: p.name, priority: p.priority || undefined,
+    status: status ? (status as any).name : null,
+    lead: lead ? (lead as any).name : null,
+    description: p.description,
+    startDate: p.startDate, targetDate: p.targetDate,
+    created: shortDate(p.createdAt),
+    updated: shortDate(p.updatedAt),
+  });
+  let milestones = '';
   if (oBool(opts, 'include-milestones')) {
     const ms = await client.projectMilestones({ filter: { project: { id: { eq: id } } } });
-    r.milestones = ms.nodes.map(fMilestone);
+    if (ms.nodes.length) {
+      milestones = '## Milestones\n\n' + ms.nodes.map((m: any) => {
+        let line = `- **${m.name}**`;
+        if (m.targetDate) line += ` (${String(m.targetDate).slice(0, 10)})`;
+        if (m.description) line += ` — ${m.description}`;
+        return line;
+      }).join('\n');
+    }
   }
-  out(r, true);
+  outMd(fm, p.content, milestones);
 };
 
 cmd['project.create'] = async (client, _pos, opts, config) => {
@@ -772,19 +922,19 @@ cmd['document.get'] = async (client, pos, opts) => {
   if (!pos[0]) die('Usage: linear document get <id>');
   const doc = await client.document(pos[0]);
 
-  if (oBool(opts, 'md')) {
-    const [project, creator] = await Promise.all([safe(() => doc.project), safe(() => doc.creator)]);
-    const fm = stripEmpty({
-      title: doc.title, icon: doc.icon,
-      project: project ? (project as any).name : null,
-      creator: creator ? (creator as any).name : null,
-      created: shortDate(doc.createdAt),
-    });
-    outMd(fm, doc.content);
+  if (oBool(opts, 'json')) {
+    out(await fDoc(doc, true), true);
     return;
   }
 
-  out(await fDoc(doc, true), true);
+  const [project, creator] = await Promise.all([safe(() => doc.project), safe(() => doc.creator)]);
+  const fm = stripEmpty({
+    title: doc.title, icon: doc.icon,
+    project: project ? (project as any).name : null,
+    creator: creator ? (creator as any).name : null,
+    created: shortDate(doc.createdAt),
+  });
+  outMd(fm, doc.content);
 };
 
 cmd['document.create'] = async (client, _pos, opts) => {
@@ -813,6 +963,43 @@ cmd['document.update'] = async (client, pos, opts) => {
   out({ success: true }, true);
 };
 
+cmd['document.read'] = async (client, pos, _opts) => {
+  if (!pos[0]) die('Usage: linear document read <id>');
+  const doc = await client.document(pos[0]);
+  const [project, creator] = await Promise.all([safe(() => doc.project), safe(() => doc.creator)]);
+  const fm = stripEmpty({
+    title: doc.title, icon: doc.icon,
+    project: project ? (project as any).name : null,
+    creator: creator ? (creator as any).name : null,
+    created: shortDate(doc.createdAt),
+  });
+  const lines = ['---'];
+  for (const [k, v] of Object.entries(fm)) {
+    if (v === null || v === undefined || v === '' || (Array.isArray(v) && v.length === 0)) continue;
+    lines.push(`${k}: ${yamlVal(v)}`);
+  }
+  lines.push('---', '');
+  if (doc.content) lines.push(formatHashlines(doc.content));
+  else lines.push('(empty content)');
+  console.log(lines.join('\n'));
+};
+
+cmd['document.edit'] = async (client, pos, opts) => {
+  if (!pos[0]) die('Usage: linear document edit <id> --edits $\'replace 3#VR:new text\\ndelete 2#MQ\'');
+  const editsText = o(opts, 'edits');
+  if (!editsText) die('--edits required (text edit commands)');
+  const edits = parseEdits(editsText);
+
+  const doc = await client.document(pos[0]);
+  if (!doc.content) die('Document has no content to edit');
+
+  const newContent = applyEdits(doc.content, edits);
+  const p = await client.updateDocument(pos[0], { content: newContent });
+  if (!p.success) die('Failed to update document');
+
+  console.log(formatHashlines(newContent));
+};
+
 // ─── Initiatives ───
 
 cmd['initiative.list'] = async (client, _pos, opts) => {
@@ -828,41 +1015,41 @@ cmd['initiative.get'] = async (client, pos, opts) => {
   const id = await rInitiative(client, pos[0]);
   const init = await client.initiative(id);
 
-  if (oBool(opts, 'md')) {
-    const owner = await safe(() => init.owner);
-    const fm = stripEmpty({
-      name: init.name, status: init.status,
-      owner: owner ? (owner as any).name : null,
-      targetDate: init.targetDate,
-      created: shortDate(init.createdAt),
-      updated: shortDate(init.updatedAt),
-    });
-    let projects = '';
+  if (oBool(opts, 'json')) {
+    const r: any = await fInit(init, true);
     if (oBool(opts, 'include-projects')) {
       const gql = await client.client.rawRequest(
         `query($id:String!){initiative(id:$id){projects{nodes{id name status{name}}}}}`,
         { id },
       );
-      const pNodes = (gql as any).data?.initiative?.projects?.nodes || [];
-      if (pNodes.length) {
-        projects = '## Projects\n\n' + pNodes.map((p: any) =>
-          `- **${p.name}** (${p.status?.name || 'unknown'})`
-        ).join('\n');
-      }
+      r.projects = (gql as any).data?.initiative?.projects?.nodes || [];
     }
-    outMd(fm, init.description, projects);
+    out(r, true);
     return;
   }
 
-  const r: any = await fInit(init, true);
+  const owner = await safe(() => init.owner);
+  const fm = stripEmpty({
+    name: init.name, status: init.status,
+    owner: owner ? (owner as any).name : null,
+    targetDate: init.targetDate,
+    created: shortDate(init.createdAt),
+    updated: shortDate(init.updatedAt),
+  });
+  let projects = '';
   if (oBool(opts, 'include-projects')) {
     const gql = await client.client.rawRequest(
       `query($id:String!){initiative(id:$id){projects{nodes{id name status{name}}}}}`,
       { id },
     );
-    r.projects = (gql as any).data?.initiative?.projects?.nodes || [];
+    const pNodes = (gql as any).data?.initiative?.projects?.nodes || [];
+    if (pNodes.length) {
+      projects = '## Projects\n\n' + pNodes.map((p: any) =>
+        `- **${p.name}** (${p.status?.name || 'unknown'})`
+      ).join('\n');
+    }
   }
-  out(r, true);
+  outMd(fm, init.description, projects);
 };
 
 cmd['initiative.create'] = async (client, _pos, opts) => {
@@ -953,16 +1140,16 @@ cmd['project-update.get'] = async (client, pos, opts) => {
   if (!pos[0]) die('Usage: linear project-update get <id>');
   const u = await client.projectUpdate(pos[0]);
 
-  if (oBool(opts, 'md')) {
-    const fm = stripEmpty({
-      health: u.health,
-      created: shortDate(u.createdAt),
-    });
-    outMd(fm, u.body);
+  if (oBool(opts, 'json')) {
+    out(fPUpdate(u), true);
     return;
   }
 
-  out(fPUpdate(u), true);
+  const fm = stripEmpty({
+    health: u.health,
+    created: shortDate(u.createdAt),
+  });
+  outMd(fm, u.body);
 };
 
 cmd['project-update.create'] = async (client, _pos, opts) => {
@@ -1000,13 +1187,13 @@ cmd['milestone.get'] = async (client, pos, opts) => {
   const id = await rMilestone(client, pos[0], o(opts, 'project') ? await rProject(client, o(opts, 'project')!) : undefined);
   const m = await client.projectMilestone(id);
 
-  if (oBool(opts, 'md')) {
-    const fm = stripEmpty({ name: m.name, targetDate: m.targetDate });
-    outMd(fm, m.description);
+  if (oBool(opts, 'json')) {
+    out(fMilestone(m), true);
     return;
   }
 
-  out(fMilestone(m), true);
+  const fm = stripEmpty({ name: m.name, targetDate: m.targetDate });
+  outMd(fm, m.description);
 };
 
 cmd['milestone.create'] = async (client, _pos, opts) => {

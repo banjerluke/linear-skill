@@ -5,8 +5,7 @@ description: >
   initiatives, milestones, documents, or any issue tracking tasks. Triggers on
   mentions of "Linear", issue identifiers like "SM-123", "create an issue",
   "update the issue", "list issues", "check project status", "add a comment",
-  "search issues", or any issue/project management workflow. Also use when
-  the user references beads/bd tasks that need syncing to Linear.
+  "search issues", or any issue/project management workflow.
 ---
 
 # Linear API Tool
@@ -14,6 +13,8 @@ description: >
 CLI tool wrapping `@linear/sdk` for Linear issue tracking.
 
 **Invocation:** `~/.claude/skills/linear/linear.ts` (executable with shebang, no `node` prefix needed)
+
+`lt` is used throughout this doc as shorthand for the full path.
 
 **Config:** Reads `.linear.toml` from CWD for defaults (`team_id`, `workspace`). Auth from `~/.config/linear/credentials.toml`.
 
@@ -68,12 +69,65 @@ Use `none` to clear nullable fields (assignee, project, parent).
 ### Issues
 ```
 lt issue list [--team SM] [--assignee me] [--state started] [--project "Name"] [--label "Bug"] [--query "text"] [--parent SM-100] [--cycle current] [--created-after 2026-01-01] [--updated-after 2026-01-01] [--limit 50] [--cursor X] [--include-archived]
-lt issue get SM-123 [--json] [--include-comments] [--include-relations]
+lt issue get SM-123 [--json] [--no-comments] [--include-relations]
 lt issue create --title "Title" [--team SM] [--description "..."] [--state "Planned"] [--assignee me] [--priority 2] [--label "Bug"] [--label "UI"] [--project "Name"] [--parent SM-100] [--cycle current] [--milestone "M1"] [--estimate 3] [--due-date 2026-03-01]
 lt issue update SM-123 [--title "New"] [--state "In Progress"] [--assignee me] [--priority 1] [--label "Bug"] [--add-label "UI"] [--remove-label "Old"] [--project "Name"] [--due-date 2026-03-01]
 lt issue delete SM-123
 lt issue search --query "search term" [--limit 20]
 ```
+
+`issue search` does full-text search across all fields (title, description, comments). `issue list --query` filters by title only.
+
+### Hashline Read/Edit (surgical content editing)
+
+Use `read` + `edit` for precise, line-level edits to issue descriptions and document content. Preferred over full replacement via `update --description` / `update --content`.
+
+**Read** returns content with hashline anchors (`LINE#HASH:content`):
+```
+lt issue read SM-123 [--no-comments]
+lt document read <id>
+```
+
+Example output:
+```
+---
+identifier: SM-123
+title: Migration plan
+state: In Progress
+---
+
+ 1#ZP:## Overview
+ 2#MQ:
+ 3#VR:Migrate billing to RevenueCat.
+ 4#KT:
+ 5#NW:## Tasks
+ 6#JB:- [ ] Create RC account
+ 7#TX:- [x] Configure Android
+```
+
+**Edit** applies surgical changes using anchors for validation:
+```
+lt issue edit SM-123 --edits $'replace 6#JB:- [x] Create RC account'
+lt document edit <id> --edits $'replace 3#VR:Updated line'
+```
+
+Edit commands (one per line, lowercase):
+- `replace ANCHOR:content` — replace the anchored line (use heredoc for multi-line)
+- `append ANCHOR:content` — insert after the anchored line
+- `prepend ANCHOR:content` — insert before the anchored line
+- `delete ANCHOR` — remove the anchored line (no `:` needed)
+
+Multiple edits in one call:
+```
+lt issue edit SM-123 --edits $'replace 6#JB:- [x] Create RC account\nappend 7#TX:- [ ] Configure webhooks'
+```
+
+Multi-line replacement with heredoc (`:<<<` ... `>>>`):
+```
+lt issue edit SM-123 --edits $'replace 3#VR:<<<\nRevenueCat handles all billing.\nSee docs for details.\n>>>'
+```
+
+On success, outputs refreshed hashline-anchored content for continued editing. On hash mismatch (content changed since read), fails with an error showing the current line content.
 
 ### Comments
 ```
@@ -109,7 +163,11 @@ lt document list [--project "Name"] [--query "text"] [--initiative "Init"]
 lt document get <id> [--json]
 lt document create --title "Title" [--project "Name"] [--content "Markdown..."] [--icon "emoji"]
 lt document update <id> [--title "New"] [--content "Updated..."]
+lt document read <id>
+lt document edit <id> --edits $'replace 3#VR:new text'
 ```
+
+Document `read`/`edit` works identically to issue `read`/`edit` — see Hashline Read/Edit section above.
 
 ### Initiatives
 ```
@@ -169,6 +227,7 @@ lt graphql query --query '{ viewer { id name } }' [--variables '{"key":"value"}'
 - `lt` = `~/.claude/skills/linear/linear.ts`
 - Env auth precedence: `LINEAR_ACCESS_TOKEN` first, then `LINEAR_API_KEY`
 - Priority: 0=None, 1=Urgent, 2=High, 3=Normal, 4=Low
+- `issue get` and `issue read` include comments by default; use `--no-comments` to suppress
 - Project states: `planned`, `started`, `paused`, `completed`, `canceled`, `backlog`
 - Initiative statuses: `planned`, `active`, `completed`, `paused`
 - Health values: `onTrack`, `atRisk`, `offTrack`
