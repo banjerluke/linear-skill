@@ -266,7 +266,7 @@ function getConfig(): Config {
 
 function parseArgs(): { resource: string; action: string; pos: string[]; opts: Opts } {
   const [resource, action, ...rest] = process.argv.slice(2);
-  if (!resource || !action) die('Usage: linear <resource> <action> [options]\nResources: issue comment label project project-update document initiative initiative-update milestone team user cycle status attachment graphql');
+  if (!resource || !action) die('Usage: linear <resource> <action> [options]\nResources: issue comment label project project-update document initiative initiative-update milestone team user cycle status attachment relation graphql auth');
   const pos: string[] = [];
   const opts: Opts = {};
   for (let i = 0; i < rest.length; i++) {
@@ -796,7 +796,8 @@ cmd['label.list'] = async (client, _pos, opts) => {
   if (o(opts, 'team')) filter.team = { key: { eq: o(opts, 'team') } };
   if (o(opts, 'name')) filter.name = { containsIgnoreCase: o(opts, 'name') };
   const r = await client.issueLabels({ filter, ...pagVars(opts) });
-  outList(await Promise.all(r.nodes.map(fLabel)), r.pageInfo);
+  const nodes = await Promise.all(r.nodes.map(fLabel));
+  outList(nodes, r.pageInfo);
 };
 
 cmd['label.create'] = async (client, _pos, opts, config) => {

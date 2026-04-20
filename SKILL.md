@@ -12,9 +12,12 @@ description: >
 
 CLI tool wrapping `@linear/sdk` for Linear issue tracking.
 
-**Invocation:** `~/.claude/skills/linear/linear.ts` (executable with shebang, no `node` prefix needed)
+**IMPORTANT - Path Resolution:**
+This skill can be installed in different locations. Before executing any commands, determine the skill directory based on where you loaded this SKILL.md file, and use that path in all commands below. Replace `$SKILL_DIR` with the actual discovered path.
 
-`lt` is used throughout this doc as shorthand for the full path.
+**Invocation:** `$SKILL_DIR/linear.ts` (executable with shebang, no `node` prefix needed)
+
+`lt` is used throughout this doc as shorthand for the full invocation path.
 
 **Config:** Reads `.linear.toml` from CWD for defaults (`team_id`, `workspace`). Auth from `~/.config/linear/credentials.toml`.
 
@@ -224,7 +227,7 @@ lt graphql query --query '{ viewer { id name } }' [--variables '{"key":"value"}'
 
 ## Notes
 
-- `lt` = `~/.claude/skills/linear/linear.ts`
+- `lt` = `$SKILL_DIR/linear.ts`
 - Env auth precedence: `LINEAR_ACCESS_TOKEN` first, then `LINEAR_API_KEY`
 - Priority: 0=None, 1=Urgent, 2=High, 3=Normal, 4=Low
 - `issue get` and `issue read` include comments by default; use `--no-comments` to suppress
