@@ -44,6 +44,15 @@ async function safe<T>(fn: () => T | Promise<T>): Promise<T | null> {
 
 const isUUID = (s: string) => /^[0-9a-f]{8}-/.test(s);
 
+function readStdin(): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    process.stdin.on('data', c => chunks.push(c));
+    process.stdin.on('end', () => resolve(Buffer.concat(chunks).toString()));
+    process.stdin.on('error', reject);
+  });
+}
+
 // ═══════════════════════════════ Hashline ═══════════════════════════════
 
 const HASH_ALPHA = 'ZPMQVRWSNKTXJBYH';
@@ -683,9 +692,9 @@ cmd['issue.read'] = async (client, pos, opts) => {
 };
 
 cmd['issue.edit'] = async (client, pos, opts) => {
-  if (!pos[0]) die('Usage: linear issue edit <identifier> --edits $\'replace 6#JB:new text\\ndelete 4#KT\'');
-  const editsText = o(opts, 'edits');
-  if (!editsText) die('--edits required (text edit commands)');
+  if (!pos[0]) die('Usage: echo "replace 6#JB:new text" | linear issue edit <identifier>');
+  const editsText = await readStdin();
+  if (!editsText.trim()) die('No edit commands on stdin');
   const edits = parseEdits(editsText);
 
   const id = await rIssue(client, pos[0]);
@@ -986,9 +995,9 @@ cmd['document.read'] = async (client, pos, _opts) => {
 };
 
 cmd['document.edit'] = async (client, pos, opts) => {
-  if (!pos[0]) die('Usage: linear document edit <id> --edits $\'replace 3#VR:new text\\ndelete 2#MQ\'');
-  const editsText = o(opts, 'edits');
-  if (!editsText) die('--edits required (text edit commands)');
+  if (!pos[0]) die('Usage: echo "replace 3#VR:new text" | linear document edit <id>');
+  const editsText = await readStdin();
+  if (!editsText.trim()) die('No edit commands on stdin');
   const edits = parseEdits(editsText);
 
   const doc = await client.document(pos[0]);

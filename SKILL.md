@@ -108,10 +108,15 @@ state: In Progress
  7#TX:- [x] Configure Android
 ```
 
-**Edit** applies surgical changes using anchors for validation:
-```
-lt issue edit SM-123 --edits $'replace 6#JB:- [x] Create RC account'
-lt document edit <id> --edits $'replace 3#VR:Updated line'
+**Edit** reads edit commands from stdin. Use a heredoc:
+```bash
+lt issue edit SM-123 <<'EDITS'
+replace 6#JB:- [x] Create RC account
+EDITS
+
+lt document edit <id> <<'EDITS'
+replace 3#VR:Updated line
+EDITS
 ```
 
 Edit commands (one per line, lowercase):
@@ -121,13 +126,21 @@ Edit commands (one per line, lowercase):
 - `delete ANCHOR` — remove the anchored line (no `:` needed)
 
 Multiple edits in one call:
-```
-lt issue edit SM-123 --edits $'replace 6#JB:- [x] Create RC account\nappend 7#TX:- [ ] Configure webhooks'
+```bash
+lt issue edit SM-123 <<'EDITS'
+replace 6#JB:- [x] Create RC account
+append 7#TX:- [ ] Configure webhooks
+EDITS
 ```
 
 Multi-line replacement with heredoc (`:<<<` ... `>>>`):
-```
-lt issue edit SM-123 --edits $'replace 3#VR:<<<\nRevenueCat handles all billing.\nSee docs for details.\n>>>'
+```bash
+lt issue edit SM-123 <<'EDITS'
+replace 3#VR:<<<
+RevenueCat handles all billing.
+See docs for details.
+>>>
+EDITS
 ```
 
 On success, outputs refreshed hashline-anchored content for continued editing. On hash mismatch (content changed since read), fails with an error showing the current line content.
@@ -167,7 +180,7 @@ lt document get <id> [--json]
 lt document create --title "Title" [--project "Name"] [--content "Markdown..."] [--icon "emoji"]
 lt document update <id> [--title "New"] [--content "Updated..."]
 lt document read <id>
-lt document edit <id> --edits $'replace 3#VR:new text'
+echo "replace 3#VR:new text" | lt document edit <id>
 ```
 
 Document `read`/`edit` works identically to issue `read`/`edit` — see Hashline Read/Edit section above.
@@ -237,6 +250,7 @@ lt graphql query --query '{ viewer { id name } }' [--variables '{"key":"value"}'
 - All list commands support `--limit N` (default 50) and `--cursor X` for pagination
 - `--team` defaults to `team_id` from `.linear.toml` when available
 - Errors output JSON to stderr: `{"error":"message"}`
+- **Linear Markdown normalization:** Linear wraps URLs in angle brackets on save — `[text](url)` becomes `[text](<url>)`. Always pre-wrap URLs when writing Markdown links: `[text](<url>)`. This prevents content from changing after save, which would invalidate hashline anchors.
 
 ## Issue Workflow
 
