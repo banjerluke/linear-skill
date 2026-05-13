@@ -30,6 +30,7 @@ Supports two auth methods:
    - If `LINEAR_API_KEY` starts with `lin_oaut`, the tool treats it as an OAuth access token automatically.
 
 ### OAuth Setup
+
 1. Go to Linear Settings → API → OAuth Applications → New
 2. Set callback URL to `http://localhost` (any port is accepted)
 3. Run: `lt auth login --client-id <id> --client-secret <secret>`
@@ -37,6 +38,7 @@ Supports two auth methods:
 5. Tokens are saved to `~/.config/linear/credentials.toml` with automatic refresh
 
 ### Auth Commands
+
 ```
 lt auth login --client-id <id> --client-secret <secret>
 lt auth status
@@ -56,6 +58,7 @@ lt auth status
 ## Identifier Resolution
 
 The tool auto-resolves human-friendly references to UUIDs:
+
 - Issues: `SM-123` -> UUID (via branch search)
 - Teams: `SM` -> UUID (by key or name)
 - Users: `me` -> current user; names/emails resolved by search
@@ -70,6 +73,9 @@ Use `none` to clear nullable fields (assignee, project, parent).
 ## Quick Reference
 
 ### Issues
+
+Note: In the Strum Machine workspace, new issues land in Triage by default. Do not pass `--state Triage` on `issue create`; that state name commonly fails to resolve even though it appears in status listings.
+
 ```
 lt issue list [--team SM] [--assignee me] [--state started] [--project "Name"] [--label "Bug"] [--query "text"] [--parent SM-100] [--cycle current] [--created-after 2026-01-01] [--updated-after 2026-01-01] [--limit 50] [--cursor X] [--include-archived]
 lt issue get SM-123 [--json] [--no-comments] [--include-relations]
@@ -81,17 +87,40 @@ lt issue search --query "search term" [--limit 20]
 
 `issue search` does full-text search across all fields (title, description, comments). `issue list --query` filters by title only.
 
+### Stdin for Long Text Options
+
+For Markdown or multi-line text, use the explicit stdin variants instead of shell command substitution:
+
+```bash
+lt issue create --title "Title" --description-stdin < description.md
+lt issue update SM-123 --description-stdin < description.md
+lt document create --title "Title" --content-stdin < content.md
+lt document update <id> --content-stdin < content.md
+lt comment create --issue SM-123 --body-stdin < comment.md
+lt project-update create --project "Name" --body-stdin < update.md
+```
+
+Supported stdin variants:
+
+- `--description-stdin` for commands that accept `--description`
+- `--content-stdin` for commands that accept `--content`
+- `--body-stdin` for commands that accept `--body`
+
+Use either the regular option or the stdin variant, not both. Only one `--*-stdin` option can be used per command.
+
 ### Hashline Read/Edit (surgical content editing)
 
 Use `read` + `edit` for precise, line-level edits to issue descriptions and document content. Preferred over full replacement via `update --description` / `update --content`.
 
 **Read** returns content with hashline anchors (`LINE#HASH:content`):
+
 ```
 lt issue read SM-123 [--no-comments]
 lt document read <id>
 ```
 
 Example output:
+
 ```
 ---
 identifier: SM-123
@@ -109,6 +138,7 @@ state: In Progress
 ```
 
 **Edit** reads edit commands from stdin. Use a heredoc:
+
 ```bash
 lt issue edit SM-123 <<'EDITS'
 replace 6#JB:- [x] Create RC account
@@ -120,12 +150,14 @@ EDITS
 ```
 
 Edit commands (one per line, lowercase):
+
 - `replace ANCHOR:content` — replace the anchored line (use heredoc for multi-line)
 - `append ANCHOR:content` — insert after the anchored line
 - `prepend ANCHOR:content` — insert before the anchored line
 - `delete ANCHOR` — remove the anchored line (no `:` needed)
 
 Multiple edits in one call:
+
 ```bash
 lt issue edit SM-123 <<'EDITS'
 replace 6#JB:- [x] Create RC account
@@ -134,6 +166,7 @@ EDITS
 ```
 
 Multi-line replacement with heredoc (`:<<<` ... `>>>`):
+
 ```bash
 lt issue edit SM-123 <<'EDITS'
 replace 3#VR:<<<
@@ -146,18 +179,21 @@ EDITS
 On success, outputs refreshed hashline-anchored content for continued editing. On hash mismatch (content changed since read), fails with an error showing the current line content.
 
 ### Comments
+
 ```
 lt comment list --issue SM-123
 lt comment create --issue SM-123 --body "Comment text" [--parent <commentId>]
 ```
 
 ### Labels
+
 ```
 lt label list [--team SM] [--name "Bug"] [--limit 50]
 lt label create --name "New Label" [--team SM] [--color "#eb5757"] [--description "..."]
 ```
 
 ### Projects
+
 ```
 lt project list [--status started] [--member me] [--query "Name"] [--initiative "Init"] [--limit 50]
 lt project get "Project Name" [--json] [--include-milestones]
@@ -166,6 +202,7 @@ lt project update "Name" [--name "New"] [--description "..."] [--lead me] [--sta
 ```
 
 ### Project Updates
+
 ```
 lt project-update list [--project "Name"]
 lt project-update get <id> [--json]
@@ -174,6 +211,7 @@ lt project-update update <id> [--body "New"] [--health atRisk]
 ```
 
 ### Documents
+
 ```
 lt document list [--project "Name"] [--query "text"] [--initiative "Init"]
 lt document get <id> [--json]
@@ -186,6 +224,7 @@ echo "replace 3#VR:new text" | lt document edit <id>
 Document `read`/`edit` works identically to issue `read`/`edit` — see Hashline Read/Edit section above.
 
 ### Initiatives
+
 ```
 lt initiative list [--status active] [--query "Name"]
 lt initiative get "Name" [--json] [--include-projects]
@@ -194,6 +233,7 @@ lt initiative update "Name" [--status active] [--owner me]
 ```
 
 ### Initiative Updates
+
 ```
 lt initiative-update list [--initiative "Name"]
 lt initiative-update create --initiative "Name" --body "Update text" [--health onTrack|atRisk|offTrack]
@@ -202,6 +242,7 @@ lt initiative-update delete <id>
 ```
 
 ### Milestones
+
 ```
 lt milestone list --project "Name"
 lt milestone get "Milestone Name" [--json] [--project "Name"]
@@ -210,6 +251,7 @@ lt milestone update "M1" [--project "Name"] [--name "New"] [--target-date 2026-0
 ```
 
 ### Teams, Users, Cycles, States
+
 ```
 lt team list [--query "Name"]
 lt team get SM
@@ -221,6 +263,7 @@ lt status get "In Progress" --team SM
 ```
 
 ### Attachments
+
 ```
 lt attachment get <id>
 lt attachment create --issue SM-123 --url "https://..." --title "Link title" [--subtitle "..."]
@@ -228,12 +271,14 @@ lt attachment delete <id>
 ```
 
 ### Issue Relations
+
 ```
 lt relation create --issue SM-123 --related SM-456 --type blocks|related|duplicate
 lt relation delete <relation-id>
 ```
 
 ### Raw GraphQL (escape hatch)
+
 ```
 lt graphql query --query '{ viewer { id name } }' [--variables '{"key":"value"}']
 ```

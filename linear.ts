@@ -53,6 +53,16 @@ function readStdin(): Promise<string> {
   });
 }
 
+let stdinTextPromise: Promise<string> | null = null;
+let stdinTextOwner: string | null = null;
+
+async function readStdinForOption(key: string): Promise<string> {
+  if (stdinTextOwner && stdinTextOwner !== key) die(`Only one --*-stdin option can be used per command (already using --${stdinTextOwner}-stdin)`);
+  stdinTextOwner = key;
+  stdinTextPromise ??= readStdin();
+  return stdinTextPromise;
+}
+
 // ═══════════════════════════════ Hashline ═══════════════════════════════
 
 const HASH_ALPHA = 'ZPMQVRWSNKTXJBYH';
@@ -155,6 +165,15 @@ function applyEdits(content: string, edits: EditOp[]): string {
 
 function o(opts: Opts, key: string): string | undefined {
   const v = opts[key]; return typeof v === 'string' ? v : undefined;
+}
+async function oText(opts: Opts, key: 'description' | 'content' | 'body'): Promise<string | undefined> {
+  const value = o(opts, key);
+  const stdinKey = `${key}-stdin`;
+  const stdinOpt = opts[stdinKey];
+  if (stdinOpt !== undefined && stdinOpt !== true) die(`--${stdinKey} does not take a value`);
+  if (value !== undefined && stdinOpt === true) die(`Use either --${key} or --${stdinKey}, not both`);
+  if (stdinOpt === true) return readStdinForOption(key);
+  return value;
 }
 function oArr(opts: Opts, key: string): string[] {
   const v = opts[key];
@@ -713,7 +732,8 @@ cmd['issue.create'] = async (client, _pos, opts, config) => {
   const teamId = await rTeam(client, o(opts, 'team'), config);
   if (!teamId) die('--team required (or set team_id in .linear.toml)');
   const input: any = { title: o(opts, 'title'), teamId };
-  if (o(opts, 'description')) input.description = o(opts, 'description');
+  const description = await oText(opts, 'description');
+  if (description !== undefined) input.description = description;
   if (o(opts, 'priority')) input.priority = parseInt(o(opts, 'priority')!);
   if (o(opts, 'estimate')) input.estimate = parseInt(o(opts, 'estimate')!);
   if (o(opts, 'due-date')) input.dueDate = o(opts, 'due-date');
@@ -736,7 +756,8 @@ cmd['issue.update'] = async (client, pos, opts, config) => {
   const id = await rIssue(client, pos[0]);
   const input: any = {};
   if (o(opts, 'title')) input.title = o(opts, 'title');
-  if (o(opts, 'description')) input.description = o(opts, 'description');
+  const description = await oText(opts, 'description');
+  if (description !== undefined) input.description = description;
   if (o(opts, 'priority')) input.priority = parseInt(o(opts, 'priority')!);
   if (o(opts, 'estimate')) input.estimate = parseInt(o(opts, 'estimate')!);
   if (o(opts, 'due-date')) input.dueDate = o(opts, 'due-date');
@@ -788,9 +809,10 @@ cmd['comment.list'] = async (client, _pos, opts) => {
 };
 
 cmd['comment.create'] = async (client, _pos, opts) => {
-  if (!o(opts, 'issue') || !o(opts, 'body')) die('--issue and --body required');
+  const body = await oText(opts, 'body');
+  if (!o(opts, 'issue') || body === undefined) die('--issue and --body/--body-stdin required');
   const issueId = await rIssue(client, o(opts, 'issue')!);
-  const input: any = { issueId, body: o(opts, 'body') };
+  const input: any = { issueId, body };
   if (o(opts, 'parent')) input.parentId = o(opts, 'parent');
   const p = await client.createComment(input);
   if (!p.success) die('Failed to create comment');
@@ -813,7 +835,8 @@ cmd['label.create'] = async (client, _pos, opts, config) => {
   if (!o(opts, 'name')) die('--name required');
   const input: any = { name: o(opts, 'name') };
   if (o(opts, 'color')) input.color = o(opts, 'color');
-  if (o(opts, 'description')) input.description = o(opts, 'description');
+  const description = await oText(opts, 'description');
+  if (description !== undefined) input.description = description;
   if (o(opts, 'team') || config.team) input.teamId = await rTeam(client, o(opts, 'team'), config);
   if (o(opts, 'parent')) input.parentId = o(opts, 'parent');
   const p = await client.createIssueLabel(input);
@@ -883,8 +906,9 @@ cmd['project.create'] = async (client, _pos, opts, config) => {
   const teamId = await rTeam(client, o(opts, 'team'), config);
   if (!teamId) die('--team required');
   const input: any = { name: o(opts, 'name'), teamIds: [teamId] };
-  if (o(opts, 'description')) input.description = o(opts, 'description');
-  if (o(opts, 'content')) input.content = o(opts, 'content');
+  const [description, content] = await Promise.all([oText(opts, 'description'), oText(opts, 'content')]);
+  if (description !== undefined) input.description = description;
+  if (content !== undefined) input.content = content;
   if (o(opts, 'color')) input.color = o(opts, 'color');
   if (o(opts, 'icon')) input.icon = o(opts, 'icon');
   if (o(opts, 'lead')) input.leadId = await rUser(client, o(opts, 'lead')!);
@@ -903,8 +927,9 @@ cmd['project.update'] = async (client, pos, opts) => {
   const id = await rProject(client, pos[0]);
   const input: any = {};
   if (o(opts, 'name')) input.name = o(opts, 'name');
-  if (o(opts, 'description')) input.description = o(opts, 'description');
-  if (o(opts, 'content')) input.content = o(opts, 'content');
+  const [description, content] = await Promise.all([oText(opts, 'description'), oText(opts, 'content')]);
+  if (description !== undefined) input.description = description;
+  if (content !== undefined) input.content = content;
   if (o(opts, 'color')) input.color = o(opts, 'color');
   if (o(opts, 'icon')) input.icon = o(opts, 'icon');
   if (o(opts, 'lead')) input.leadId = o(opts, 'lead') === 'none' ? null : await rUser(client, o(opts, 'lead')!);
@@ -950,7 +975,8 @@ cmd['document.get'] = async (client, pos, opts) => {
 cmd['document.create'] = async (client, _pos, opts) => {
   if (!o(opts, 'title')) die('--title required');
   const input: any = { title: o(opts, 'title') };
-  if (o(opts, 'content')) input.content = o(opts, 'content');
+  const content = await oText(opts, 'content');
+  if (content !== undefined) input.content = content;
   if (o(opts, 'project')) input.projectId = await rProject(client, o(opts, 'project')!);
   if (o(opts, 'color')) input.color = o(opts, 'color');
   if (o(opts, 'icon')) input.icon = o(opts, 'icon');
@@ -964,7 +990,8 @@ cmd['document.update'] = async (client, pos, opts) => {
   if (!pos[0]) die('Usage: linear document update <id> [options]');
   const input: any = {};
   if (o(opts, 'title')) input.title = o(opts, 'title');
-  if (o(opts, 'content')) input.content = o(opts, 'content');
+  const content = await oText(opts, 'content');
+  if (content !== undefined) input.content = content;
   if (o(opts, 'project')) input.projectId = await rProject(client, o(opts, 'project')!);
   if (o(opts, 'color')) input.color = o(opts, 'color');
   if (o(opts, 'icon')) input.icon = o(opts, 'icon');
@@ -1065,8 +1092,9 @@ cmd['initiative.get'] = async (client, pos, opts) => {
 cmd['initiative.create'] = async (client, _pos, opts) => {
   if (!o(opts, 'name')) die('--name required');
   const input: any = { name: o(opts, 'name') };
-  if (o(opts, 'description')) input.description = o(opts, 'description');
-  if (o(opts, 'content')) input.content = o(opts, 'content');
+  const [description, content] = await Promise.all([oText(opts, 'description'), oText(opts, 'content')]);
+  if (description !== undefined) input.description = description;
+  if (content !== undefined) input.content = content;
   if (o(opts, 'status')) input.status = o(opts, 'status');
   if (o(opts, 'owner')) input.ownerId = await rUser(client, o(opts, 'owner')!);
   if (o(opts, 'target-date')) input.targetDate = o(opts, 'target-date');
@@ -1082,8 +1110,9 @@ cmd['initiative.update'] = async (client, pos, opts) => {
   const id = await rInitiative(client, pos[0]);
   const input: any = {};
   if (o(opts, 'name')) input.name = o(opts, 'name');
-  if (o(opts, 'description')) input.description = o(opts, 'description');
-  if (o(opts, 'content')) input.content = o(opts, 'content');
+  const [description, content] = await Promise.all([oText(opts, 'description'), oText(opts, 'content')]);
+  if (description !== undefined) input.description = description;
+  if (content !== undefined) input.content = content;
   if (o(opts, 'status')) input.status = o(opts, 'status');
   if (o(opts, 'owner')) input.ownerId = o(opts, 'owner') === 'none' ? null : await rUser(client, o(opts, 'owner')!);
   if (o(opts, 'target-date')) input.targetDate = o(opts, 'target-date');
@@ -1108,10 +1137,11 @@ cmd['initiative-update.list'] = async (client, _pos, opts) => {
 };
 
 cmd['initiative-update.create'] = async (client, _pos, opts) => {
-  if (!o(opts, 'initiative') || !o(opts, 'body')) die('--initiative and --body required');
+  const body = await oText(opts, 'body');
+  if (!o(opts, 'initiative') || body === undefined) die('--initiative and --body/--body-stdin required');
   const gql = await client.client.rawRequest(
     `mutation($input:InitiativeUpdateCreateInput!){initiativeUpdateCreate(input:$input){success}}`,
-    { input: { initiativeId: await rInitiative(client, o(opts, 'initiative')!), body: o(opts, 'body'), ...(o(opts, 'health') && { health: o(opts, 'health') }) } },
+    { input: { initiativeId: await rInitiative(client, o(opts, 'initiative')!), body, ...(o(opts, 'health') && { health: o(opts, 'health') }) } },
   );
   out((gql as any).data?.initiativeUpdateCreate, true);
 };
@@ -1119,7 +1149,8 @@ cmd['initiative-update.create'] = async (client, _pos, opts) => {
 cmd['initiative-update.update'] = async (client, pos, opts) => {
   if (!pos[0]) die('Usage: linear initiative-update update <id> [options]');
   const input: any = {};
-  if (o(opts, 'body')) input.body = o(opts, 'body');
+  const body = await oText(opts, 'body');
+  if (body !== undefined) input.body = body;
   if (o(opts, 'health')) input.health = o(opts, 'health');
   const gql = await client.client.rawRequest(
     `mutation($id:String!,$input:InitiativeUpdateUpdateInput!){initiativeUpdateUpdate(id:$id,input:$input){success}}`,
@@ -1163,8 +1194,9 @@ cmd['project-update.get'] = async (client, pos, opts) => {
 };
 
 cmd['project-update.create'] = async (client, _pos, opts) => {
-  if (!o(opts, 'project') || !o(opts, 'body')) die('--project and --body required');
-  const input: any = { projectId: await rProject(client, o(opts, 'project')!), body: o(opts, 'body') };
+  const body = await oText(opts, 'body');
+  if (!o(opts, 'project') || body === undefined) die('--project and --body/--body-stdin required');
+  const input: any = { projectId: await rProject(client, o(opts, 'project')!), body };
   if (o(opts, 'health')) input.health = o(opts, 'health');
   if (oBool(opts, 'diff-hidden')) input.isDiffHidden = true;
   const p = await client.createProjectUpdate(input);
@@ -1175,7 +1207,8 @@ cmd['project-update.create'] = async (client, _pos, opts) => {
 cmd['project-update.update'] = async (client, pos, opts) => {
   if (!pos[0]) die('Usage: linear project-update update <id> [options]');
   const input: any = {};
-  if (o(opts, 'body')) input.body = o(opts, 'body');
+  const body = await oText(opts, 'body');
+  if (body !== undefined) input.body = body;
   if (o(opts, 'health')) input.health = o(opts, 'health');
   if (oBool(opts, 'diff-hidden')) input.isDiffHidden = true;
   const p = await client.updateProjectUpdate(pos[0], input);
@@ -1209,7 +1242,8 @@ cmd['milestone.get'] = async (client, pos, opts) => {
 cmd['milestone.create'] = async (client, _pos, opts) => {
   if (!o(opts, 'project') || !o(opts, 'name')) die('--project and --name required');
   const input: any = { projectId: await rProject(client, o(opts, 'project')!), name: o(opts, 'name') };
-  if (o(opts, 'description')) input.description = o(opts, 'description');
+  const description = await oText(opts, 'description');
+  if (description !== undefined) input.description = description;
   if (o(opts, 'target-date')) input.targetDate = o(opts, 'target-date');
   const p = await client.createProjectMilestone(input);
   if (!p.success) die('Failed to create milestone');
@@ -1221,7 +1255,8 @@ cmd['milestone.update'] = async (client, pos, opts) => {
   const id = await rMilestone(client, pos[0], o(opts, 'project') ? await rProject(client, o(opts, 'project')!) : undefined);
   const input: any = {};
   if (o(opts, 'name')) input.name = o(opts, 'name');
-  if (o(opts, 'description')) input.description = o(opts, 'description');
+  const description = await oText(opts, 'description');
+  if (description !== undefined) input.description = description;
   if (o(opts, 'target-date')) input.targetDate = o(opts, 'target-date') === 'none' ? null : o(opts, 'target-date');
   const p = await client.updateProjectMilestone(id, input);
   if (!p.success) die('Failed to update milestone');
