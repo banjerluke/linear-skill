@@ -1,5 +1,5 @@
 {
-  "name": "linear-agent-skill",
+  "name": "linear-skill",
   "version": "0.1.0",
   "description": "Agent skill for working with Linear issues, projects, documents, milestones, and comments.",
   "type": "module",

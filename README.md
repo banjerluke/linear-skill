@@ -1,4 +1,4 @@
-# Linear Agent Skill
+# Linear Skill
 
 An installable agent skill for working with Linear issues, projects, initiatives, milestones, documents, comments, labels, cycles, and raw GraphQL.
 
@@ -9,13 +9,13 @@ The skill includes a bundled Node.js CLI that wraps `@linear/sdk` and gives agen
 Install from GitHub with the `skills` CLI:
 
 ```bash
-npx skills add <owner>/linear-agent-skill --skill linear -a codex -g
+npx skills add <owner>/linear-skill --skill linear -a codex -g
 ```
 
 You can also install directly from the skill directory URL:
 
 ```bash
-npx skills add https://github.com/<owner>/linear-agent-skill/tree/main/skills/linear -a codex -g
+npx skills add https://github.com/<owner>/linear-skill/tree/main/skills/linear -a codex -g
 ```
 
 Replace `codex` with another supported agent name if needed, or omit `-g` to install into the current project.
