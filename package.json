@@ -1,9 +1,17 @@
 {
-  "name": "linear-tool",
+  "name": "linear-agent-skill",
   "version": "0.1.0",
+  "description": "Agent skill for working with Linear issues, projects, documents, milestones, and comments.",
   "type": "module",
   "private": true,
+  "scripts": {
+    "build": "esbuild src/linear.ts --bundle --platform=node --format=esm --target=node20 --outfile=skills/linear/bin/linear.mjs --banner:js='#!/usr/bin/env node'",
+    "check": "node --check skills/linear/bin/linear.mjs"
+  },
   "dependencies": {
     "@linear/sdk": "^37.0.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0"
   }
 }

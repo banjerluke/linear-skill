@@ -6,16 +6,19 @@ description: >
   mentions of "Linear", issue identifiers like "SM-123", "create an issue",
   "update the issue", "list issues", "check project status", "add a comment",
   "search issues", or any issue/project management workflow.
+license: MIT
 ---
 
 # Linear API Tool
 
 CLI tool wrapping `@linear/sdk` for Linear issue tracking.
 
+**Requirements:** Node.js 20+ and either a Linear OAuth app or Linear API token.
+
 **IMPORTANT - Path Resolution:**
 This skill can be installed in different locations. Before executing any commands, determine the skill directory based on where you loaded this SKILL.md file, and use that path in all commands below. Replace `$SKILL_DIR` with the actual discovered path.
 
-**Invocation:** `$SKILL_DIR/linear.ts` (executable with shebang, no `node` prefix needed)
+**Invocation:** `$SKILL_DIR/bin/linear.mjs` (executable with shebang, no `node` prefix needed)
 
 `lt` is used throughout this doc as shorthand for the full invocation path.
 
@@ -73,8 +76,6 @@ Use `none` to clear nullable fields (assignee, project, parent).
 ## Quick Reference
 
 ### Issues
-
-Note: In the Strum Machine workspace, new issues land in Triage by default. Do not pass `--state Triage` on `issue create`; that state name commonly fails to resolve even though it appears in status listings.
 
 ```
 lt issue list [--team SM] [--assignee me] [--state started] [--project "Name"] [--label "Bug"] [--query "text"] [--parent SM-100] [--cycle current] [--created-after 2026-01-01] [--updated-after 2026-01-01] [--limit 50] [--cursor X] [--include-archived]
@@ -296,7 +297,7 @@ lt graphql query --query '{ viewer { id name } }' [--variables '{"key":"value"}'
 
 ## Notes
 
-- `lt` = `$SKILL_DIR/linear.ts`
+- `lt` = `$SKILL_DIR/bin/linear.mjs`
 - Env auth precedence: `LINEAR_ACCESS_TOKEN` first, then `LINEAR_API_KEY`
 - Priority: 0=None, 1=Urgent, 2=High, 3=Normal, 4=Low
 - `issue get` and `issue read` include comments by default; use `--no-comments` to suppress

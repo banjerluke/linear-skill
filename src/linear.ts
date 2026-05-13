@@ -1,4 +1,3 @@
-#!/usr/bin/env -S node --experimental-strip-types
 // Linear API CLI — wraps @linear/sdk for ergonomic JSON access
 // Usage: <this-file> <resource> <action> [options]
 
