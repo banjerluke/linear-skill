@@ -87,9 +87,9 @@ lt issue search --query "search term" [--limit 20]
 
 `issue search` does full-text search across all fields (title, description, comments). `issue list --query` filters by title only.
 
-### Stdin for Long Text Options
+### Prefer Stdin for Markdown/Text Bodies
 
-For Markdown or multi-line text, use the explicit stdin variants instead of shell command substitution:
+For comments, descriptions, document content, project updates, or any Markdown/text body beyond a tiny shell-safe phrase, prefer the explicit stdin variants. This avoids shell expansion and quoting bugs with Markdown, URLs, query strings, placeholders like `<email>`, and other shell-special characters.
 
 ```bash
 lt issue create --title "Title" --description-stdin < description.md
@@ -98,6 +98,17 @@ lt document create --title "Title" --content-stdin < content.md
 lt document update <id> --content-stdin < content.md
 lt comment create --issue SM-123 --body-stdin < comment.md
 lt project-update create --project "Name" --body-stdin < update.md
+```
+
+Inline `--body "..."`, `--description "..."`, and `--content "..."` are okay only for short plain strings with no shell-special characters. When in doubt, use a single-quoted heredoc:
+
+```bash
+lt comment create --issue SM-123 --body-stdin <<'EOF'
+Implemented the fix.
+
+- `?devLogin=<email>` now switches users.
+- Verification passed.
+EOF
 ```
 
 Supported stdin variants:
