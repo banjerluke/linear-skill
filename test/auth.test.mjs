@@ -53,6 +53,7 @@ test('auth login --help explains assisted login without starting OAuth', async (
   assert.match(result.stdout, /Keep the\s+process running/);
   assert.match(result.stdout, /full localhost callback URL/);
   assert.match(result.stdout, /--all/);
+  assert.match(result.stdout, /Cancel and Manage/);
   assert.match(result.stdout, /Never ask the user.*password, API key, or access token/);
   assert.doesNotMatch(result.stderr, /linear\.app\/oauth\/authorize/);
 });

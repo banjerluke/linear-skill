@@ -96234,6 +96234,10 @@ Agent workflow:
   3. If the localhost redirect fails, ask for the full URL in their address bar.
   4. Write that URL to the waiting process, then verify with auth status.
 
+If Linear shows only Cancel and Manage, the app is already installed and no
+callback will be sent. Do not reuse an official vendor app's client ID. Use a
+dedicated OAuth app, or remove an installation you own before trying again.
+
 Never ask the user for their Linear password, API key, or access token.`);
 }
 function configuredIdentityAuthSource(identity) {

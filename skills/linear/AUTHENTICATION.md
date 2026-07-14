@@ -55,7 +55,9 @@ The CLI listens for the HTTP callback and accepts a pasted callback URL at the s
 
 The authorization code is single-use. The CLI verifies the callback origin, path, and OAuth state before exchanging it.
 
-Login sends `prompt=consent` so Linear returns to the callback even when the app is already installed. Without it, Linear may show an "already installed" management screen instead of issuing a new authorization code.
+Login sends `prompt=consent` so Linear displays the consent state every time. This does not guarantee a new authorization code for an existing `actor=app` installation. If Linear shows an "already installed" screen with only **Cancel** and **Manage**, no callback will be sent.
+
+An official vendor app's public client ID cannot be used as a fallback for this CLI when that app is already installed: the existing app installation and token belong to the vendor's integration. Do not remove an official app unless intentionally disconnecting that product. Use a dedicated OAuth application for this skill instead. If a dedicated app you own is stranded because its credentials were lost, remove that installation from Linear settings and begin login again with a fresh URL.
 
 ## Commands
 
