@@ -8,6 +8,7 @@ import { homedir } from 'node:os';
 import { createServer } from 'node:http';
 import { randomBytes } from 'node:crypto';
 import { readProjectConfig } from './config.mjs';
+import { getCurrentIssue, resolveIssueReference } from './current-issue.mjs';
 
 // ═══════════════════════════════ Helpers ═══════════════════════════════
 
@@ -403,6 +404,7 @@ async function rUser(client: LinearClient, ref: string): Promise<string> {
 }
 
 async function rIssue(client: LinearClient, ref: string): Promise<string> {
+  ref = resolveIssueReference(ref);
   const ck = `i:${ref}`;
   if (_c.has(ck)) return _c.get(ck)!;
   if (isUUID(ref)) { _c.set(ck, ref); return ref; }
@@ -857,6 +859,12 @@ cmd['issue.search'] = async (client, _pos, opts) => {
   if (!term) die('--query required');
   const r = await client.searchIssues(term, { ...pagVars(opts) });
   outList(await Promise.all(r.nodes.map(n => fIssue(n as any))), (r as any).pageInfo);
+};
+
+cmd['issue.current'] = async (_client, _pos, opts) => {
+  const current = getCurrentIssue();
+  if (oBool(opts, 'plain')) console.log(current.identifier);
+  else out(current, true);
 };
 
 // ─── Comments ───
@@ -1546,6 +1554,14 @@ async function main() {
     if (action === 'login') return authLogin(opts);
     if (action === 'status') return authStatus();
     die('Unknown auth action. Available: login, status');
+  }
+
+  // Resolving the current issue is a local Git operation and needs no Linear credentials.
+  if (resource === 'issue' && action === 'current') {
+    const current = getCurrentIssue();
+    if (oBool(opts, 'plain')) console.log(current.identifier);
+    else out(current, true);
+    return;
   }
 
   const auth = await getAuthWithRefresh();

@@ -94631,6 +94631,33 @@ function readProjectConfig(cwd = process.cwd()) {
   };
 }
 
+// src/current-issue.mjs
+import { execFileSync as execFileSync2 } from "node:child_process";
+var ISSUE_IDENTIFIER = /\b([a-zA-Z0-9]+)-([1-9][0-9]*)\b/;
+function getCurrentIssue(cwd = process.cwd()) {
+  let branch;
+  try {
+    branch = execFileSync2("git", ["branch", "--show-current"], {
+      cwd,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"]
+    }).trim();
+  } catch {
+    throw new Error("Cannot determine the current issue outside a Git worktree");
+  }
+  if (!branch) throw new Error("Cannot determine the current issue from a detached HEAD");
+  const match = branch.match(ISSUE_IDENTIFIER);
+  if (!match) throw new Error(`Current branch does not contain a Linear issue identifier: ${branch}`);
+  return {
+    identifier: `${match[1].toUpperCase()}-${match[2]}`,
+    branch,
+    source: "git-branch"
+  };
+}
+function resolveIssueReference(reference, cwd = process.cwd()) {
+  return reference.toLowerCase() === "current" ? getCurrentIssue(cwd).identifier : reference;
+}
+
 // src/linear.ts
 function die(msg) {
   console.error(JSON.stringify({ error: msg }));
@@ -94973,6 +95000,7 @@ async function rUser(client, ref) {
   return users.nodes[0].id;
 }
 async function rIssue(client, ref) {
+  ref = resolveIssueReference(ref);
   const ck = `i:${ref}`;
   if (_c.has(ck)) return _c.get(ck);
   if (isUUID(ref)) {
@@ -95453,6 +95481,11 @@ cmd["issue.search"] = async (client, _pos, opts) => {
   if (!term) die("--query required");
   const r = await client.searchIssues(term, { ...pagVars(opts) });
   outList(await Promise.all(r.nodes.map((n) => fIssue(n))), r.pageInfo);
+};
+cmd["issue.current"] = async (_client, _pos, opts) => {
+  const current = getCurrentIssue();
+  if (oBool(opts, "plain")) console.log(current.identifier);
+  else out(current, true);
 };
 cmd["comment.list"] = async (client, _pos, opts) => {
   if (!o(opts, "issue")) die("--issue required");
@@ -96082,6 +96115,12 @@ async function main() {
     if (action === "login") return authLogin(opts);
     if (action === "status") return authStatus();
     die("Unknown auth action. Available: login, status");
+  }
+  if (resource === "issue" && action === "current") {
+    const current = getCurrentIssue();
+    if (oBool(opts, "plain")) console.log(current.identifier);
+    else out(current, true);
+    return;
   }
   const auth = await getAuthWithRefresh();
   const config = getConfig();

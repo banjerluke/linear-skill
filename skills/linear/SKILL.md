@@ -63,6 +63,7 @@ lt auth status
 The tool auto-resolves human-friendly references to UUIDs:
 
 - Issues: `SM-123` -> UUID (via branch search)
+- Current issue: use the explicit reference `current` to resolve an identifier from the Git branch
 - Teams: `SM` -> UUID (by key or name)
 - Users: `me` -> current user; names/emails resolved by search
 - Projects: by name (exact then fuzzy)
@@ -80,6 +81,8 @@ Use `none` to clear nullable fields (assignee, project, parent).
 ```
 lt issue list [--team SM] [--assignee me] [--state started] [--project "Name"] [--label "Bug"] [--query "text"] [--parent SM-100] [--cycle current] [--created-after 2026-01-01] [--updated-after 2026-01-01] [--limit 50] [--cursor X] [--include-archived]
 lt issue get SM-123 [--json] [--no-comments] [--include-relations]
+lt issue current [--plain]
+lt issue get current [--json]
 lt issue create --title "Title" [--team SM] [--description "..."] [--state "Planned"] [--assignee me] [--priority 2] [--label "Bug"] [--label "UI"] [--project "Name"] [--parent SM-100] [--cycle current] [--milestone "M1"] [--estimate 3] [--due-date 2026-03-01]
 lt issue update SM-123 [--title "New"] [--state "In Progress"] [--assignee me] [--priority 1] [--label "Bug"] [--add-label "UI"] [--remove-label "Old"] [--project "Name"] [--due-date 2026-03-01]
 lt issue delete SM-123
@@ -87,6 +90,8 @@ lt issue search --query "search term" [--limit 20]
 ```
 
 `issue search` does full-text search across all fields (title, description, comments). `issue list --query` filters by title only.
+
+`issue current` is local and does not require authentication. It extracts an identifier such as `ENG-123` from the current Git branch. Commands never infer the current issue from an omitted argument; pass the literal reference `current` to opt in.
 
 ### Prefer Stdin for Markdown/Text Bodies
 
