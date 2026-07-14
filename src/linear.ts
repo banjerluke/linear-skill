@@ -275,7 +275,8 @@ type Auth = { apiKey: string } | { accessToken: string };
 type Identity = { name: string; source: string };
 
 const CREDENTIALS_PATH = join(homedir(), '.config', 'linear', 'credentials.toml');
-const DEFAULT_OAUTH_SCOPES = [
+const USER_OAUTH_SCOPES = ['read', 'write'];
+const APP_OAUTH_SCOPES = [
   'read',
   'write',
   'app:assignable',
@@ -285,7 +286,6 @@ const DEFAULT_OAUTH_SCOPES = [
   'initiative:read',
   'initiative:write',
 ];
-const PUBLIC_OAUTH_CLIENT_ID = '797741a4d504939df7d793838d4160d4';
 
 function normalizeIdentity(value: string): string {
   const identity = value.trim().toLowerCase();
@@ -384,7 +384,7 @@ async function refreshAccessToken(refreshToken: string, clientId: string, client
   return res.json() as any;
 }
 
-async function requestClientCredentialsToken(clientId: string, clientSecret: string): Promise<{ access_token: string; expires_in: number }> {
+async function requestClientCredentialsToken(clientId: string, clientSecret: string, scopes = APP_OAUTH_SCOPES): Promise<{ access_token: string; expires_in: number }> {
   const res = await fetch('https://api.linear.app/oauth/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -392,11 +392,23 @@ async function requestClientCredentialsToken(clientId: string, clientSecret: str
       grant_type: 'client_credentials',
       client_id: clientId,
       client_secret: clientSecret,
-      scope: DEFAULT_OAUTH_SCOPES.join(','),
+      scope: scopes.join(','),
     }),
   });
   if (!res.ok) die(`Client credentials authentication failed: ${res.status} ${await res.text()}`);
   return res.json() as any;
+}
+
+async function fetchOAuthWorkspace(accessToken: string): Promise<{ workspace: string; organization: string }> {
+  const res = await fetch('https://api.linear.app/graphql', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify({ query: '{ organization { urlKey name } }' }),
+  });
+  if (!res.ok) throw new Error(`Could not read the authenticated Linear workspace: ${res.status} ${await res.text()}`);
+  const gql = await res.json() as any;
+  const workspace = gql.data?.organization?.urlKey || 'default';
+  return { workspace, organization: gql.data?.organization?.name || workspace };
 }
 
 function looksLikeOAuthToken(token: string): boolean {
@@ -485,15 +497,15 @@ function clientCredentialsSecretProvider(identity: string): ClientCredentialsSec
   return null;
 }
 
-async function mintClientCredentials(identity: string, clientId: string, secret: { value: string; source: string }): Promise<Auth> {
+async function mintClientCredentials(identity: string, clientId: string, secret: { value: string; source: string }, scopes = APP_OAUTH_SCOPES): Promise<{ accessToken: string }> {
   console.error(`Authenticating identity "${identity}" with Linear client credentials from ${secret.source}.`);
-  const tokens = await requestClientCredentialsToken(clientId, secret.value);
+  const tokens = await requestClientCredentialsToken(clientId, secret.value, scopes);
   const tokenExpiry = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
   writeProfile(identity, {
     client_id: clientId,
     actor: 'app',
     grant_type: 'client_credentials',
-    scopes: DEFAULT_OAUTH_SCOPES.join(','),
+    scopes: scopes.join(','),
     access_token: tokens.access_token,
     token_expiry: tokenExpiry,
   });
@@ -1762,37 +1774,36 @@ cmd['graphql.query'] = async (client, _pos, opts) => {
 function authLoginHelp(): void {
   console.log(`Usage: linear auth login [options]
 
-Authenticate an agent identity with Linear using OAuth and PKCE.
+Authenticate an identity with Linear. A client ID alone uses user OAuth with
+PKCE, so actions are attributed to the authorizing user. When both a client ID
+and client secret are configured, the CLI uses app-mode client credentials
+without opening a browser.
 
-The command prints an authorization URL and waits for the callback. Keep the
-process running while the user authorizes the app. If the browser can reach the
-CLI's localhost server, login completes automatically. Otherwise, ask the user
-to copy the full localhost callback URL from the browser address bar and write
-it to this process's stdin.
+For user OAuth, the command prints an authorization URL and waits for the
+callback. Keep the process running while the user authorizes access. If the
+browser cannot reach the CLI's localhost server, ask the user to copy the full
+localhost callback URL from the address bar and write it to this process's
+stdin.
 
 Options:
   --identity <name>   Credential identity (for example: codex or claude)
   --all               Login every configured identity that is not authenticated
   --force             With --all, reauthorize identities that are already configured
   --client-id <id>    Linear OAuth application client ID
-  --use-generic-app   Explicitly authorize the bundled generic OAuth app
   --scope <scope>     Override OAuth scopes; repeat for multiple scopes
   --port <port>       Local callback port (default: 41549)
   --help              Show this help
 
-Default scopes:
-  read, write, app:assignable, app:mentionable, customer:read, customer:write,
-  initiative:read, initiative:write
+Default user scopes: read, write
+
+Default app scopes: read, write, app:assignable, app:mentionable,
+  customer:read, customer:write, initiative:read, initiative:write
 
 Agent workflow:
   1. Start this command in a long-lived interactive process.
   2. Give the printed authorization URL to the user.
   3. If the localhost redirect fails, ask for the full URL in their address bar.
   4. Write that URL to the waiting process, then verify with auth status.
-
-If Linear shows only Cancel and Manage, the app is already installed and no
-callback will be sent. Do not reuse an official vendor app's client ID. Use a
-dedicated OAuth app, or remove an installation you own before trying again.
 
 Never ask the user for their Linear password, API key, or access token.`);
 }
@@ -1802,7 +1813,7 @@ type AuthLoginResult = {
   identity: string;
   workspace: string;
   organization: string;
-  actor: 'app';
+  actor: 'user' | 'app';
 };
 
 function configuredIdentityAuthSource(identity: string): string | null {
@@ -1824,8 +1835,8 @@ function configuredIdentityAuthSource(identity: string): string | null {
 }
 
 async function authLoginAll(opts: Opts): Promise<void> {
-  if (o(opts, 'identity') || o(opts, 'client-id') || oBool(opts, 'use-generic-app')) {
-    throw new Error('--all uses identity-specific client IDs from .linear.toml and cannot be combined with --identity, --client-id, or --use-generic-app.');
+  if (o(opts, 'identity') || o(opts, 'client-id')) {
+    throw new Error('--all uses identity-specific client IDs from .linear.toml and cannot be combined with --identity or --client-id.');
   }
 
   const config = getConfig();
@@ -1875,24 +1886,35 @@ async function authLoginOne(opts: Opts): Promise<AuthLoginResult> {
   const identity = resolveIdentity(opts);
   const config = getConfig();
   const explicitClientId = o(opts, 'client-id');
-  const useGenericApp = oBool(opts, 'use-generic-app');
-  if (explicitClientId && useGenericApp) throw new Error('Use either --client-id or --use-generic-app, not both.');
-  const clientId = useGenericApp ? PUBLIC_OAUTH_CLIENT_ID : explicitClientId || configuredOAuthClientId(identity.name, config);
-  if (!clientId) throw new Error(`No OAuth client ID configured for identity "${identity.name}". Pass --client-id, set ${identityEnvKey(identity.name, 'LINEAR_OAUTH_CLIENT_ID')}, or add [oauth.${identity.name}] to .linear.toml. To deliberately authorize the bundled generic app instead, pass --use-generic-app.`);
+  const clientId = explicitClientId || configuredOAuthClientId(identity.name, config);
+  if (!clientId) throw new Error(`No OAuth client ID configured for identity "${identity.name}". Pass --client-id, set ${identityEnvKey(identity.name, 'LINEAR_OAUTH_CLIENT_ID')}, or add [oauth.${identity.name}] to .linear.toml.`);
+
+  const scopes = oArr(opts, 'scope');
+  const secretProvider = clientCredentialsSecretProvider(identity.name);
+  if (secretProvider) {
+    const requestedScopes = scopes.length ? scopes : APP_OAUTH_SCOPES;
+    const auth = await mintClientCredentials(identity.name, clientId, await secretProvider.resolve(), requestedScopes);
+    const { workspace, organization } = await fetchOAuthWorkspace(auth.accessToken);
+    const profile = readSection(readFileSync(CREDENTIALS_PATH, 'utf-8'), profileSection(identity.name));
+    writeProfile(identity.name, { ...profile, workspace, organization });
+    console.error(`\nIdentity "${identity.name}" authenticated as an app with workspace "${organization}" (${workspace}).`);
+    console.error(`Credentials saved to ${CREDENTIALS_PATH}`);
+    return { success: true, identity: identity.name, workspace, organization, actor: 'app' };
+  }
 
   const state = randomBytes(16).toString('hex');
   const verifier = randomBytes(32).toString('base64url');
   const challenge = createHash('sha256').update(verifier).digest('base64url');
   const port = oInt(opts, 'port') ?? 41549;
   const redirectUri = `http://localhost:${port}/callback`;
-  const scopes = oArr(opts, 'scope');
+  const requestedScopes = scopes.length ? scopes : USER_OAUTH_SCOPES;
   const authorizeUrl = new URL('https://linear.app/oauth/authorize');
   authorizeUrl.search = new URLSearchParams({
     client_id: clientId,
     redirect_uri: redirectUri,
     response_type: 'code',
-    scope: (scopes.length ? scopes : DEFAULT_OAUTH_SCOPES).join(','),
-    actor: 'app',
+    scope: requestedScopes.join(','),
+    actor: 'user',
     prompt: 'consent',
     state,
     code_challenge: challenge,
@@ -1900,7 +1922,6 @@ async function authLoginOne(opts: Opts): Promise<AuthLoginResult> {
   }).toString();
 
   console.error(`\nAuthenticating identity "${identity.name}" (${identity.source}).`);
-  if (useGenericApp) console.error('Using the bundled generic OAuth app; Linear actions will not appear as the selected local identity.');
   console.error(`Open this URL in your browser to authorize:\n\n  ${authorizeUrl.toString()}\n`);
   console.error(`Waiting for callback on port ${port}...`);
   console.error('If the browser cannot reach localhost, copy its full URL from the address bar and paste it here.');
@@ -1982,32 +2003,24 @@ async function authLoginOne(opts: Opts): Promise<AuthLoginResult> {
   if (!tokenRes.ok) throw new Error(`Token exchange failed: ${tokenRes.status} ${await tokenRes.text()}`);
   const tokens = await tokenRes.json() as { access_token: string; refresh_token?: string; expires_in: number };
 
-  // Fetch workspace slug
-  const gqlRes = await fetch('https://api.linear.app/graphql', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${tokens.access_token}` },
-    body: JSON.stringify({ query: '{ organization { urlKey name } }' }),
-  });
-  const gql = await gqlRes.json() as any;
-  const workspace = gql.data?.organization?.urlKey || 'default';
-  const orgName = gql.data?.organization?.name || workspace;
+  const { workspace, organization } = await fetchOAuthWorkspace(tokens.access_token);
 
   const expiry = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
   const fields: Record<string, string> = {
     workspace,
-    organization: orgName,
+    organization,
     client_id: clientId,
-    actor: 'app',
-    scopes: (scopes.length ? scopes : DEFAULT_OAUTH_SCOPES).join(','),
+    actor: 'user',
+    scopes: requestedScopes.join(','),
     access_token: tokens.access_token,
     token_expiry: expiry,
   };
   if (tokens.refresh_token) fields.refresh_token = tokens.refresh_token;
   writeProfile(identity.name, fields);
 
-  console.error(`\nIdentity "${identity.name}" authenticated with workspace "${orgName}" (${workspace}).`);
+  console.error(`\nIdentity "${identity.name}" authenticated as the user with workspace "${organization}" (${workspace}).`);
   console.error(`Credentials saved to ${CREDENTIALS_PATH}`);
-  return { success: true, identity: identity.name, workspace, organization: orgName, actor: 'app' };
+  return { success: true, identity: identity.name, workspace, organization, actor: 'user' };
 }
 
 async function authLogin(opts: Opts): Promise<void> {

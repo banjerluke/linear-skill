@@ -57,9 +57,11 @@ test('auth login --help explains assisted login without starting OAuth', async (
   const result = await run(['auth', 'login', '--help'], cleanEnv());
   assert.equal(result.code, 0);
   assert.match(result.stdout, /Keep the\s+process running/);
-  assert.match(result.stdout, /full localhost callback URL/);
+  assert.match(result.stdout, /full\s+localhost callback URL/);
   assert.match(result.stdout, /--all/);
-  assert.match(result.stdout, /Cancel and Manage/);
+  assert.match(result.stdout, /client ID alone uses user OAuth/);
+  assert.match(result.stdout, /both a client ID\s+and client secret.*app-mode client credentials/);
+  assert.doesNotMatch(result.stdout, /use-generic-app/);
   assert.match(result.stdout, /Never ask the user.*password, API key, or access token/);
   assert.doesNotMatch(result.stderr, /linear\.app\/oauth\/authorize/);
 });
@@ -318,22 +320,11 @@ test('auth login rejects --force without --all', async () => {
   assert.match(result.stderr, /--force is valid only with --all/);
 });
 
-test('does not silently fall back to the bundled generic app', async () => {
+test('requires a configured client ID with no generic fallback', async () => {
   const result = await run(['auth', 'login', '--identity', 'other'], cleanEnv());
   assert.equal(result.code, 1);
   assert.match(result.stderr, /No OAuth client ID configured.*other/);
-  assert.match(result.stderr, /--use-generic-app/);
   assert.doesNotMatch(result.stderr, /linear\.app\/oauth\/authorize/);
-});
-
-test('uses the bundled public client ID only when explicitly requested', async t => {
-  const cwd = await mkdtemp(join(tmpdir(), 'linear-public-client-test-'));
-  t.after(() => rm(cwd, { recursive: true, force: true }));
-  const port = 44000 + Math.floor(Math.random() * 1000);
-  const child = spawn(CLI, ['auth', 'login', '--identity', 'other', '--use-generic-app', '--port', String(port)], { cwd, env: cleanEnv() });
-  t.after(() => child.kill('SIGTERM'));
-  const url = await readLoginUrl(child);
-  assert.equal(url.searchParams.get('client_id'), '797741a4d504939df7d793838d4160d4');
 });
 
 function readLoginUrl(child) {
@@ -354,7 +345,7 @@ function readLoginUrl(child) {
   });
 }
 
-test('PKCE login URL uses an app actor and no client secret', async t => {
+test('PKCE login URL defaults to a user actor and no client secret', async t => {
   const port = 42000 + Math.floor(Math.random() * 1000);
   const child = spawn(CLI, ['auth', 'login', '--identity', 'test', '--client-id', 'public-client-id', '--port', String(port)], {
     env: cleanEnv(),
@@ -365,21 +356,38 @@ test('PKCE login URL uses an app actor and no client secret', async t => {
 
   assert.equal(url.searchParams.get('client_id'), 'public-client-id');
   assert.equal(url.searchParams.get('redirect_uri'), `http://localhost:${port}/callback`);
-  assert.equal(url.searchParams.get('actor'), 'app');
+  assert.equal(url.searchParams.get('actor'), 'user');
   assert.equal(url.searchParams.get('prompt'), 'consent');
-  assert.deepEqual(url.searchParams.get('scope').split(','), [
-    'read',
-    'write',
-    'app:assignable',
-    'app:mentionable',
-    'customer:read',
-    'customer:write',
-    'initiative:read',
-    'initiative:write',
-  ]);
+  assert.deepEqual(url.searchParams.get('scope').split(','), ['read', 'write']);
   assert.equal(url.searchParams.get('code_challenge_method'), 'S256');
   assert.ok(url.searchParams.get('code_challenge'));
   assert.equal(url.searchParams.has('client_secret'), false);
+});
+
+test('auth login uses app client credentials when client ID and secret are available', async t => {
+  const cwd = await mkdtemp(join(tmpdir(), 'linear-login-client-credentials-config-'));
+  const home = await mkdtemp(join(tmpdir(), 'linear-login-client-credentials-home-'));
+  t.after(() => Promise.all([
+    rm(cwd, { recursive: true, force: true }),
+    rm(home, { recursive: true, force: true }),
+  ]));
+  await writeFile(join(cwd, '.linear.toml'), `[oauth.codex]\nclient_id = "codex-client-id"\n`);
+
+  const result = await run(['auth', 'login', '--identity', 'codex'], cleanEnv({
+    HOME: home,
+    CODEX_LINEAR_OAUTH_CLIENT_SECRET: 'super-secret',
+    MOCK_LINEAR_CLIENT_ID: 'codex-client-id',
+    MOCK_LINEAR_CLIENT_SECRET: 'super-secret',
+    NODE_OPTIONS: `--import=${MOCK_FETCH}`,
+  }), cwd);
+  assert.equal(result.code, 0);
+  assert.equal(JSON.parse(result.stdout).actor, 'app');
+  assert.doesNotMatch(result.stderr, /linear\.app\/oauth\/authorize/);
+
+  const credentials = await readFile(join(home, '.config', 'linear', 'credentials.toml'), 'utf8');
+  assert.match(credentials, /actor = "app"/);
+  assert.match(credentials, /grant_type = "client_credentials"/);
+  assert.match(credentials, /scopes = "read,write,app:assignable,app:mentionable,customer:read,customer:write,initiative:read,initiative:write"/);
 });
 
 test('login accepts a pasted callback while waiting on localhost', async t => {

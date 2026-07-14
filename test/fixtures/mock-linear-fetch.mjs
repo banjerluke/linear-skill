@@ -20,7 +20,10 @@ globalThis.fetch = async (input, init = {}) => {
     if (authorization !== 'Bearer lin_oauth_mock_client_credentials') {
       return new Response('invalid access token', { status: 401 });
     }
-    return Response.json({ data: { viewer: { id: 'mock-viewer' } } });
+    return Response.json({ data: {
+      viewer: { id: 'mock-viewer' },
+      organization: { urlKey: 'mock-workspace', name: 'Mock Workspace' },
+    } });
   }
   return originalFetch(input, init);
 };

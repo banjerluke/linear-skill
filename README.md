@@ -23,40 +23,31 @@ Replace `codex` with another supported agent name if needed, or omit `-g` to ins
 ## Requirements
 
 - Node.js 20+
-- Optional: a custom Linear OAuth application client ID or Linear API token
+- A Linear OAuth application client ID or Linear API token
 
 ## Authentication
 
-OAuth with PKCE is recommended because it needs no client secret and actions are attributed to the app identity. Create a separate Linear OAuth application for every identity that should appear independently in Linear, such as Codex, Claude Code, and Cursor. Configure each callback URL as `http://localhost:41549/callback`.
+OAuth with PKCE is the default. It needs only a client ID, and actions are attributed to the Linear user who authorizes access. Create a Linear OAuth application and configure its callback URL as `http://localhost:41549/callback`. A project-wide client ID can be shared by every local agent identity:
 
 ```toml
-[oauth.codex]
-client_id = "<codex-client-id>"
-
-[oauth.claude]
-client_id = "<claude-client-id>"
-
-[oauth.cursor]
-client_id = "<cursor-client-id>"
+[oauth]
+default_client_id = "<client-id>"
 ```
 
 ```bash
 lt auth login --identity codex
 lt auth login --identity claude
 lt auth login --identity cursor
-lt auth login --all
 lt auth list
 ```
 
-`auth login --all` reads the identity-specific OAuth applications from `.linear.toml`, prints the discovered configuration path, skips identities that already have usable credentials, and authenticates the rest sequentially. Add `--force` to reauthorize every configured identity.
+When `.linear.toml` contains identity-specific `[oauth.<identity>]` sections, `auth login --all` authenticates them sequentially. It prints the discovered configuration path, skips identities that already have usable credentials, and accepts `--force` to reauthorize every configured identity.
 
 During normal commands, the CLI detects Codex, Claude Code, or Cursor Agent from runtime markers and selects that identity's credentials. For manual shells, nested agents, or other harnesses, pass `--identity <name>` or set `LINEAR_AGENT_IDENTITY`. Explicit selection always wins.
 
 The same login command also works when the CLI is on a cloud or remote machine whose localhost callback cannot be reached by the user's browser. The CLI listens for a normal callback and simultaneously accepts a callback URL on stdin. Send the printed authorization URL to the user and ask them to authorize it. If the redirected localhost page fails to load, ask the user to copy the full URL from the browser address bar and paste it back, then write that URL to the waiting CLI process. The CLI validates the OAuth state and completes the PKCE token exchange on the remote machine. Do not ask the user for a Linear password, API key, or access token.
 
-If Linear shows an "already installed" page with only **Cancel** and **Manage**, it will not send a callback. Official vendor client IDs cannot be reused to obtain a second token for this CLI; configure a dedicated OAuth application instead.
-
-The client ID is public. The CLI generates a fresh PKCE verifier for login and stores only the resulting access and refresh tokens. Login defaults to `read`, `write`, assignable, mentionable, customer read/write, and initiative read/write scopes so re-consent does not downgrade an existing agent installation. Explicit `--scope` options replace that default set.
+The client ID is public. The CLI generates a fresh PKCE verifier for login and stores only the resulting access and refresh tokens. User login defaults to `read` and `write`. Explicit `--scope` options replace that default set.
 
 You can also authenticate with an environment variable:
 
@@ -70,9 +61,9 @@ Identity-specific variables such as `CODEX_LINEAR_ACCESS_TOKEN` and `CLAUDE_LINE
 
 OAuth credentials are stored by identity at `~/.config/linear/credentials.toml`. The file is written atomically with user-only permissions.
 
-For private apps used across multiple machines, enable Linear client credentials and either set `<IDENTITY>_LINEAR_OAUTH_CLIENT_SECRET` or configure `client_secret_command` under `[oauth.<identity>]`. Any normal command then mints and caches an app token automatically; no `auth login` command or browser callback is needed. The secret is never stored in the credentials file. See [skills/linear/CONFIGURATION.md](skills/linear/CONFIGURATION.md) for the Bitwarden Secrets Manager example.
+To use a distinct Linear app actor, enable client credentials and provide both its client ID and secret. Set `<IDENTITY>_LINEAR_OAUTH_CLIENT_SECRET` or configure `client_secret_command` under `[oauth.<identity>]`. Any normal command then mints and caches an app token automatically; no browser callback is needed. The secret is never stored in the credentials file. App mode uses the complete agent scope set. See [skills/linear/CONFIGURATION.md](skills/linear/CONFIGURATION.md) for the Bitwarden Secrets Manager example.
 
-API keys remain supported for users who want actions attributed to their own Linear account. OAuth logins use `actor=app` and are attributed to the selected application identity.
+In short: a client ID alone uses user OAuth; a client ID plus a client secret uses app-mode client credentials. API keys also remain supported and act as their Linear user.
 
 ## Project Configuration
 
@@ -102,7 +93,7 @@ client_id = "<cursor-client-id>"
 
 Additional identities use the same `[oauth.<identity>]` shape. Client IDs, secret IDs, and secret commands may be committed; access tokens, refresh tokens, API keys, and client secrets must not be placed in `.linear.toml`.
 
-OAuth client ID precedence is `--client-id`, identity-specific environment variable, identity-specific `.linear.toml`, generic environment variable, then project default. Login fails when none is configured so a named identity cannot silently authorize the bundled generic app. Pass `--use-generic-app` only when that generic identity is intentional.
+OAuth client ID precedence is `--client-id`, identity-specific environment variable, identity-specific `.linear.toml`, generic environment variable, then project default. Login fails when none is configured; the CLI has no bundled or generic OAuth application fallback.
 
 ## Local Development
 
