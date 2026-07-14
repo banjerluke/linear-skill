@@ -70,6 +70,8 @@ Identity-specific variables such as `CODEX_LINEAR_ACCESS_TOKEN` and `CLAUDE_LINE
 
 OAuth credentials are stored by identity at `~/.config/linear/credentials.toml`. The file is written atomically with user-only permissions.
 
+For private apps used across multiple machines, enable Linear client credentials and set `<IDENTITY>_LINEAR_OAUTH_CLIENT_SECRET` in each machine's environment or secret manager. Any normal command then mints and caches an app token automatically; no `auth login` command or browser callback is needed. The secret is never stored in the credentials file. Client IDs can remain in `.linear.toml` or `<IDENTITY>_LINEAR_OAUTH_CLIENT_ID`.
+
 API keys remain supported for users who want actions attributed to their own Linear account. OAuth logins use `actor=app` and are attributed to the selected application identity.
 
 ## Project Configuration

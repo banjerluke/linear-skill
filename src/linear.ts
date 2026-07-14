@@ -374,6 +374,21 @@ async function refreshAccessToken(refreshToken: string, clientId: string, client
   return res.json() as any;
 }
 
+async function requestClientCredentialsToken(clientId: string, clientSecret: string): Promise<{ access_token: string; expires_in: number }> {
+  const res = await fetch('https://api.linear.app/oauth/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'client_credentials',
+      client_id: clientId,
+      client_secret: clientSecret,
+      scope: DEFAULT_OAUTH_SCOPES.join(','),
+    }),
+  });
+  if (!res.ok) die(`Client credentials authentication failed: ${res.status} ${await res.text()}`);
+  return res.json() as any;
+}
+
 function looksLikeOAuthToken(token: string): boolean {
   return token.startsWith('lin_oaut');
 }
@@ -394,6 +409,37 @@ function getGenericEnvAuth(): Auth | null {
   if (!token) return null;
   if (looksLikeOAuthToken(token)) return { accessToken: token };
   return { apiKey: token };
+}
+
+function configuredOAuthClientId(identity: string, config = getConfig()): string | undefined {
+  return process.env[identityEnvKey(identity, 'LINEAR_OAUTH_CLIENT_ID')]?.trim()
+    || config.oauthClientIds[identity]
+    || process.env.LINEAR_OAUTH_CLIENT_ID?.trim()
+    || config.oauthDefaultClientId;
+}
+
+function clientCredentialsSecret(identity: string): { value: string; source: string } | null {
+  const identityKey = identityEnvKey(identity, 'LINEAR_OAUTH_CLIENT_SECRET');
+  const identitySecret = process.env[identityKey]?.trim();
+  if (identitySecret) return { value: identitySecret, source: identityKey };
+  const genericSecret = process.env.LINEAR_OAUTH_CLIENT_SECRET?.trim();
+  if (genericSecret) return { value: genericSecret, source: 'LINEAR_OAUTH_CLIENT_SECRET' };
+  return null;
+}
+
+async function mintClientCredentials(identity: string, clientId: string, secret: { value: string; source: string }): Promise<Auth> {
+  console.error(`Authenticating identity "${identity}" with Linear client credentials from ${secret.source}.`);
+  const tokens = await requestClientCredentialsToken(clientId, secret.value);
+  const tokenExpiry = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
+  writeProfile(identity, {
+    client_id: clientId,
+    actor: 'app',
+    grant_type: 'client_credentials',
+    scopes: DEFAULT_OAUTH_SCOPES.join(','),
+    access_token: tokens.access_token,
+    token_expiry: tokenExpiry,
+  });
+  return { accessToken: tokens.access_token };
 }
 
 function getAuth(identity: string): Auth {
@@ -431,8 +477,20 @@ async function getAuthWithRefresh(identity: string): Promise<Auth> {
 
   const c = existsSync(CREDENTIALS_PATH) ? readFileSync(CREDENTIALS_PATH, 'utf-8') : '';
   const profile = readSection(c, profileSection(identity));
+  const secret = clientCredentialsSecret(identity);
+  const clientId = secret ? configuredOAuthClientId(identity) : undefined;
+  if (secret && !clientId) {
+    die(`Client credentials secret ${secret.source} is set, but no OAuth client ID is configured for identity "${identity}".`);
+  }
   if (profile.access_token) {
+    if (secret && profile.grant_type !== 'client_credentials') {
+      return mintClientCredentials(identity, clientId!, secret);
+    }
     if (profile.token_expiry && new Date(profile.token_expiry).getTime() - Date.now() < 5 * 60 * 1000) {
+      if (profile.grant_type === 'client_credentials') {
+        if (!secret) die(`Cannot renew client credentials for identity "${identity}": set ${identityEnvKey(identity, 'LINEAR_OAUTH_CLIENT_SECRET')}.`);
+        return mintClientCredentials(identity, clientId!, secret);
+      }
       if (!profile.refresh_token || !profile.client_id) die(`Cannot refresh identity "${identity}": missing refresh_token or client_id.`);
       const tokens = await refreshAccessToken(profile.refresh_token, profile.client_id);
       const tokenExpiry = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
@@ -444,6 +502,8 @@ async function getAuthWithRefresh(identity: string): Promise<Auth> {
 
   const identityEnvAuth = getIdentityEnvAuth(identity);
   if (identityEnvAuth) return identityEnvAuth;
+
+  if (secret) return mintClientCredentials(identity, clientId!, secret);
 
   const auth = getAuth(identity);
   if ('apiKey' in auth) return auth;
@@ -1678,6 +1738,8 @@ function configuredIdentityAuthSource(identity: string): string | null {
   if (process.env[identityEnvKey(identity, 'LINEAR_API_KEY')]?.trim()) {
     return identityEnvKey(identity, 'LINEAR_API_KEY');
   }
+  const secret = clientCredentialsSecret(identity);
+  if (secret) return `${secret.source} (automatic client credentials)`;
   return null;
 }
 
@@ -1735,11 +1797,7 @@ async function authLoginOne(opts: Opts): Promise<AuthLoginResult> {
   const explicitClientId = o(opts, 'client-id');
   const useGenericApp = oBool(opts, 'use-generic-app');
   if (explicitClientId && useGenericApp) throw new Error('Use either --client-id or --use-generic-app, not both.');
-  const clientId = useGenericApp ? PUBLIC_OAUTH_CLIENT_ID : explicitClientId
-    || process.env[identityEnvKey(identity.name, 'LINEAR_OAUTH_CLIENT_ID')]?.trim()
-    || config.oauthClientIds[identity.name]
-    || process.env.LINEAR_OAUTH_CLIENT_ID?.trim()
-    || config.oauthDefaultClientId;
+  const clientId = useGenericApp ? PUBLIC_OAUTH_CLIENT_ID : explicitClientId || configuredOAuthClientId(identity.name, config);
   if (!clientId) throw new Error(`No OAuth client ID configured for identity "${identity.name}". Pass --client-id, set ${identityEnvKey(identity.name, 'LINEAR_OAUTH_CLIENT_ID')}, or add [oauth.${identity.name}] to .linear.toml. To deliberately authorize the bundled generic app instead, pass --use-generic-app.`);
 
   const state = randomBytes(16).toString('hex');
@@ -1906,6 +1964,7 @@ function authStatus(opts: Opts): void {
       workspace: profile.workspace || null,
       organization: profile.organization || null,
       scopes: profile.scopes?.split(',') || [],
+      grantType: profile.grant_type || 'authorization_code',
       tokenExpiry: profile.token_expiry || null,
       expired: expiry ? expiry.getTime() < Date.now() : false,
       hasRefreshToken: !!profile.refresh_token,
@@ -1941,7 +2000,7 @@ function authList(): void {
   const content = readFileSync(CREDENTIALS_PATH, 'utf-8');
   const identities = [...content.matchAll(/^\[identity\.([a-z][a-z0-9_-]*)\]$/gm)].map(match => {
     const profile = readSection(content, profileSection(match[1]));
-    return { identity: match[1], workspace: profile.workspace || null, organization: profile.organization || null, actor: profile.actor || 'app' };
+    return { identity: match[1], workspace: profile.workspace || null, organization: profile.organization || null, actor: profile.actor || 'app', grantType: profile.grant_type || 'authorization_code' };
   });
   out(identities, false);
 }

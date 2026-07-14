@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
-import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 
 const CLI = new URL('../skills/linear/bin/linear.mjs', import.meta.url).pathname;
+const MOCK_FETCH = new URL('./fixtures/mock-linear-fetch.mjs', import.meta.url).href;
 const CLEAN_HOME = join(tmpdir(), `linear-auth-clean-${process.pid}`);
 const HARNESS_KEYS = [
   'CLAUDECODE',
@@ -22,13 +23,17 @@ const HARNESS_KEYS = [
   'CLAUDE_LINEAR_ACCESS_TOKEN',
   'CLAUDE_LINEAR_API_KEY',
   'CLAUDE_LINEAR_OAUTH_CLIENT_ID',
+  'CLAUDE_LINEAR_OAUTH_CLIENT_SECRET',
   'CODEX_LINEAR_ACCESS_TOKEN',
   'CODEX_LINEAR_API_KEY',
   'CODEX_LINEAR_OAUTH_CLIENT_ID',
+  'CODEX_LINEAR_OAUTH_CLIENT_SECRET',
   'CURSOR_LINEAR_ACCESS_TOKEN',
   'CURSOR_LINEAR_API_KEY',
   'CURSOR_LINEAR_OAUTH_CLIENT_ID',
+  'CURSOR_LINEAR_OAUTH_CLIENT_SECRET',
   'LINEAR_OAUTH_CLIENT_ID',
+  'LINEAR_OAUTH_CLIENT_SECRET',
 ];
 
 function cleanEnv(extra = {}) {
@@ -130,6 +135,66 @@ test('reads the detected identity client ID from .linear.toml', async t => {
   t.after(() => child.kill('SIGTERM'));
   const url = await readLoginUrl(child);
   assert.equal(url.searchParams.get('client_id'), 'cursor-public-id');
+});
+
+test('normal commands automatically mint and cache client credentials', async t => {
+  const cwd = await mkdtemp(join(tmpdir(), 'linear-client-credentials-config-'));
+  const home = await mkdtemp(join(tmpdir(), 'linear-client-credentials-home-'));
+  t.after(() => Promise.all([
+    rm(cwd, { recursive: true, force: true }),
+    rm(home, { recursive: true, force: true }),
+  ]));
+  await writeFile(join(cwd, '.linear.toml'), `[oauth.codex]\nclient_id = "codex-client-id"\n`);
+
+  const args = ['graphql', 'query', '--query', '{ viewer { id } }'];
+  const result = await run(args, cleanEnv({
+    HOME: home,
+    CODEX_THREAD_ID: 'test-thread',
+    CODEX_LINEAR_OAUTH_CLIENT_SECRET: 'super-secret',
+    MOCK_LINEAR_CLIENT_ID: 'codex-client-id',
+    MOCK_LINEAR_CLIENT_SECRET: 'super-secret',
+    NODE_OPTIONS: `--import=${MOCK_FETCH}`,
+  }), cwd);
+  assert.equal(result.code, 0);
+  assert.match(result.stderr, /Authenticating identity "codex" with Linear client credentials/);
+
+  const credentials = await readFile(join(home, '.config', 'linear', 'credentials.toml'), 'utf8');
+  assert.match(credentials, /grant_type = "client_credentials"/);
+  assert.match(credentials, /client_id = "codex-client-id"/);
+  assert.match(credentials, /access_token = "lin_oauth_mock_client_credentials"/);
+  assert.match(credentials, /token_expiry = "/);
+  assert.doesNotMatch(credentials, /super-secret/);
+
+  const cached = await run(args, cleanEnv({
+    HOME: home,
+    CODEX_THREAD_ID: 'test-thread',
+    NODE_OPTIONS: `--import=${MOCK_FETCH}`,
+  }), cwd);
+  assert.equal(cached.code, 0);
+  assert.doesNotMatch(cached.stderr, /Authenticating identity/);
+
+  await writeFile(join(home, '.config', 'linear', 'credentials.toml'), `version = "2"
+
+[identity.codex]
+client_id = "codex-client-id"
+actor = "app"
+access_token = "lin_oauth_revoked_authorization_code"
+refresh_token = "old-refresh-token"
+token_expiry = "2999-01-01T00:00:00.000Z"
+`);
+  const migrated = await run(args, cleanEnv({
+    HOME: home,
+    CODEX_THREAD_ID: 'test-thread',
+    CODEX_LINEAR_OAUTH_CLIENT_SECRET: 'super-secret',
+    MOCK_LINEAR_CLIENT_ID: 'codex-client-id',
+    MOCK_LINEAR_CLIENT_SECRET: 'super-secret',
+    NODE_OPTIONS: `--import=${MOCK_FETCH}`,
+  }), cwd);
+  assert.equal(migrated.code, 0);
+  assert.match(migrated.stderr, /Authenticating identity "codex" with Linear client credentials/);
+  const migratedCredentials = await readFile(join(home, '.config', 'linear', 'credentials.toml'), 'utf8');
+  assert.match(migratedCredentials, /grant_type = "client_credentials"/);
+  assert.doesNotMatch(migratedCredentials, /old-refresh-token/);
 });
 
 test('auth login --all skips configured identities that already have credentials', async t => {
