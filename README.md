@@ -44,8 +44,11 @@ client_id = "<cursor-client-id>"
 lt auth login --identity codex
 lt auth login --identity claude
 lt auth login --identity cursor
+lt auth login --all
 lt auth list
 ```
+
+`auth login --all` reads the identity-specific OAuth applications from `.linear.toml`, prints the discovered configuration path, skips identities that already have usable credentials, and authenticates the rest sequentially. Add `--force` to reauthorize every configured identity.
 
 During normal commands, the CLI detects Codex, Claude Code, or Cursor Agent from runtime markers and selects that identity's credentials. For manual shells, nested agents, or other harnesses, pass `--identity <name>` or set `LINEAR_AGENT_IDENTITY`. Explicit selection always wins.
 
@@ -92,7 +95,7 @@ client_id = "<cursor-client-id>"
 
 Additional identities use the same `[oauth.<identity>]` shape. Client IDs are public and may be committed; access tokens, refresh tokens, API keys, and client secrets must not be placed in `.linear.toml`.
 
-OAuth client ID precedence is `--client-id`, identity-specific environment variable, identity-specific `.linear.toml`, generic environment variable, project default, then the bundled public app.
+OAuth client ID precedence is `--client-id`, identity-specific environment variable, identity-specific `.linear.toml`, generic environment variable, then project default. Login fails when none is configured so a named identity cannot silently authorize the bundled generic app. Pass `--use-generic-app` only when that generic identity is intentional.
 
 ## Local Development
 

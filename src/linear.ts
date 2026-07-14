@@ -16,6 +16,7 @@ import { uploadLocalFile } from './upload-file.mjs';
 
 type Opts = Record<string, string | string[] | true>;
 type Config = {
+  path?: string;
   team?: string;
   oauthDefaultClientId?: string;
   oauthClientIds: Record<string, string>;
@@ -467,6 +468,7 @@ function getConfig(): Config {
     if (section.client_id) oauthClientIds[identity] = section.client_id;
   }
   return {
+    path: p,
     team: c.match(/^team_id\s*=\s*"(.+?)"/m)?.[1],
     oauthDefaultClientId: oauth.default_client_id,
     oauthClientIds,
@@ -1621,7 +1623,10 @@ it to this process's stdin.
 
 Options:
   --identity <name>   Credential identity (for example: codex or claude)
+  --all               Login every configured identity that is not authenticated
+  --force             With --all, reauthorize identities that are already configured
   --client-id <id>    Linear OAuth application client ID
+  --use-generic-app   Explicitly authorize the bundled generic OAuth app
   --scope <scope>     OAuth scope; repeat for multiple scopes (default: read, write)
   --port <port>       Local callback port (default: 41549)
   --help              Show this help
@@ -1635,16 +1640,90 @@ Agent workflow:
 Never ask the user for their Linear password, API key, or access token.`);
 }
 
-async function authLogin(opts: Opts): Promise<void> {
+type AuthLoginResult = {
+  success: true;
+  identity: string;
+  workspace: string;
+  organization: string;
+  actor: 'app';
+};
+
+function configuredIdentityAuthSource(identity: string): string | null {
+  const content = existsSync(CREDENTIALS_PATH) ? readFileSync(CREDENTIALS_PATH, 'utf-8') : '';
+  const profile = readSection(content, profileSection(identity));
+  if (profile.access_token) {
+    const expired = profile.token_expiry ? new Date(profile.token_expiry).getTime() <= Date.now() : false;
+    if (!expired || profile.refresh_token) return 'stored profile';
+  }
+  if (process.env[identityEnvKey(identity, 'LINEAR_ACCESS_TOKEN')]?.trim()) {
+    return identityEnvKey(identity, 'LINEAR_ACCESS_TOKEN');
+  }
+  if (process.env[identityEnvKey(identity, 'LINEAR_API_KEY')]?.trim()) {
+    return identityEnvKey(identity, 'LINEAR_API_KEY');
+  }
+  return null;
+}
+
+async function authLoginAll(opts: Opts): Promise<void> {
+  if (o(opts, 'identity') || o(opts, 'client-id') || oBool(opts, 'use-generic-app')) {
+    throw new Error('--all uses identity-specific client IDs from .linear.toml and cannot be combined with --identity, --client-id, or --use-generic-app.');
+  }
+
+  const config = getConfig();
+  const identities = Object.keys(config.oauthClientIds);
+  if (!config.path || identities.length === 0) {
+    throw new Error('No identity-specific OAuth applications found. Run this command from a project with [oauth.<identity>] sections in .linear.toml.');
+  }
+
+  console.error(`Using Linear configuration: ${config.path}`);
+  if (getGenericEnvAuth()) {
+    console.error('Warning: LINEAR_ACCESS_TOKEN or LINEAR_API_KEY is set and will override stored identity profiles during normal commands.');
+  }
+
+  const force = oBool(opts, 'force');
+  const authenticated: AuthLoginResult[] = [];
+  const skipped: Array<{ identity: string; source: string }> = [];
+  const failed: Array<{ identity: string; error: string }> = [];
+
+  for (const identity of identities) {
+    const source = configuredIdentityAuthSource(identity);
+    if (source && !force) {
+      console.error(`Skipping identity "${identity}" (${source}).`);
+      skipped.push({ identity, source });
+      continue;
+    }
+
+    try {
+      authenticated.push(await authLoginOne({ ...opts, all: true, identity }));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`Authentication failed for identity "${identity}": ${message}`);
+      failed.push({ identity, error: message });
+    }
+  }
+
+  out({
+    success: failed.length === 0,
+    configPath: config.path,
+    authenticated: authenticated.map(({ identity, workspace, organization, actor }) => ({ identity, workspace, organization, actor })),
+    skipped,
+    failed,
+  }, false);
+  if (failed.length) process.exitCode = 1;
+}
+
+async function authLoginOne(opts: Opts): Promise<AuthLoginResult> {
   const identity = resolveIdentity(opts);
   const config = getConfig();
-  const clientId = o(opts, 'client-id')
+  const explicitClientId = o(opts, 'client-id');
+  const useGenericApp = oBool(opts, 'use-generic-app');
+  if (explicitClientId && useGenericApp) throw new Error('Use either --client-id or --use-generic-app, not both.');
+  const clientId = useGenericApp ? PUBLIC_OAUTH_CLIENT_ID : explicitClientId
     || process.env[identityEnvKey(identity.name, 'LINEAR_OAUTH_CLIENT_ID')]?.trim()
     || config.oauthClientIds[identity.name]
     || process.env.LINEAR_OAUTH_CLIENT_ID?.trim()
-    || config.oauthDefaultClientId
-    || PUBLIC_OAUTH_CLIENT_ID;
-  if (!clientId) die(`No OAuth client ID configured for identity "${identity.name}". Pass --client-id, set ${identityEnvKey(identity.name, 'LINEAR_OAUTH_CLIENT_ID')}, or add [oauth.${identity.name}] to .linear.toml.`);
+    || config.oauthDefaultClientId;
+  if (!clientId) throw new Error(`No OAuth client ID configured for identity "${identity.name}". Pass --client-id, set ${identityEnvKey(identity.name, 'LINEAR_OAUTH_CLIENT_ID')}, or add [oauth.${identity.name}] to .linear.toml. To deliberately authorize the bundled generic app instead, pass --use-generic-app.`);
 
   const state = randomBytes(16).toString('hex');
   const verifier = randomBytes(32).toString('base64url');
@@ -1659,12 +1738,14 @@ async function authLogin(opts: Opts): Promise<void> {
     response_type: 'code',
     scope: (scopes.length ? scopes : DEFAULT_OAUTH_SCOPES).join(','),
     actor: 'app',
+    prompt: 'consent',
     state,
     code_challenge: challenge,
     code_challenge_method: 'S256',
   }).toString();
 
   console.error(`\nAuthenticating identity "${identity.name}" (${identity.source}).`);
+  if (useGenericApp) console.error('Using the bundled generic OAuth app; Linear actions will not appear as the selected local identity.');
   console.error(`Open this URL in your browser to authorize:\n\n  ${authorizeUrl.toString()}\n`);
   console.error(`Waiting for callback on port ${port}...`);
   console.error('If the browser cannot reach localhost, copy its full URL from the address bar and paste it here.');
@@ -1689,12 +1770,12 @@ async function authLogin(opts: Opts): Promise<void> {
       if (url.pathname !== '/callback') { res.writeHead(404); res.end(); return; }
       try {
         const authCode = parseCallback(url);
-        res.writeHead(200, { 'Content-Type': 'text/html' });
+        res.writeHead(200, { 'Content-Type': 'text/html', Connection: 'close' });
         res.end('<h2>Authorization successful!</h2><p>You can close this tab.</p>');
         finish(null, authCode);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        res.writeHead(400); res.end(message);
+        res.writeHead(400, { Connection: 'close' }); res.end(message);
         finish(error instanceof Error ? error : new Error(message));
       }
     });
@@ -1705,9 +1786,12 @@ async function authLogin(opts: Opts): Promise<void> {
       settled = true;
       clearTimeout(timeout);
       readline.close();
-      srv.close();
-      if (error) reject(error);
-      else resolve(authCode!);
+      const settle = () => {
+        if (error) reject(error);
+        else resolve(authCode!);
+      };
+      if (srv.listening) srv.close(settle);
+      else settle();
     };
 
     srv.once('error', error => {
@@ -1740,7 +1824,7 @@ async function authLogin(opts: Opts): Promise<void> {
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({ grant_type: 'authorization_code', code, redirect_uri: redirectUri, client_id: clientId, code_verifier: verifier }),
   });
-  if (!tokenRes.ok) die(`Token exchange failed: ${tokenRes.status} ${await tokenRes.text()}`);
+  if (!tokenRes.ok) throw new Error(`Token exchange failed: ${tokenRes.status} ${await tokenRes.text()}`);
   const tokens = await tokenRes.json() as { access_token: string; refresh_token?: string; expires_in: number };
 
   // Fetch workspace slug
@@ -1768,7 +1852,14 @@ async function authLogin(opts: Opts): Promise<void> {
 
   console.error(`\nIdentity "${identity.name}" authenticated with workspace "${orgName}" (${workspace}).`);
   console.error(`Credentials saved to ${CREDENTIALS_PATH}`);
-  out({ success: true, identity: identity.name, workspace, organization: orgName, actor: 'app' }, false);
+  return { success: true, identity: identity.name, workspace, organization: orgName, actor: 'app' };
+}
+
+async function authLogin(opts: Opts): Promise<void> {
+  if (oBool(opts, 'all')) return authLoginAll(opts);
+  if (oBool(opts, 'force')) throw new Error('--force is valid only with --all.');
+  const result = await authLoginOne(opts);
+  out(result, false);
 }
 
 function authStatus(opts: Opts): void {

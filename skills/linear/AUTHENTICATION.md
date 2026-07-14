@@ -12,6 +12,8 @@ The CLI supports two authentication methods:
 
 The CLI keeps separate credential profiles for agent identities. It detects Codex, Claude Code, and Cursor Agent when their runtime markers are present. Pass `--identity <name>` or set `LINEAR_AGENT_IDENTITY` when running manually, nesting one agent inside another, or using another harness. Explicit identity selection always wins.
 
+The local identity selects a credential profile; it does not rename the Linear OAuth application. To have actions appear as Codex, Claude Code, or another distinct app, configure that app's client ID for the identity. Login fails when no client ID is configured instead of silently authorizing the bundled generic app. Use `--use-generic-app` only when the generic Linear app identity is intentional.
+
 Identity selection precedence: `--identity`, `LINEAR_AGENT_IDENTITY`, then conservative Codex/Claude Code/Cursor detection.
 
 Authentication precedence: generic `LINEAR_ACCESS_TOKEN` / `LINEAR_API_KEY` overrides, refreshable identity profile, then identity-specific environment fallback.
@@ -38,6 +40,10 @@ Run `lt auth login --help` for the current command options and agent workflow.
 3. Keep the process alive until the callback completes.
 4. Run `lt auth status --identity <name>` after login.
 
+To authenticate every identity-specific OAuth app in the discovered `.linear.toml`, run `lt auth login --all`. The CLI prints the configuration path, skips identities with usable stored or identity-specific environment credentials, and processes the remaining identities sequentially. Use `--force` to reauthorize all configured identities. Generic `LINEAR_ACCESS_TOKEN` and `LINEAR_API_KEY` values do not cause identities to be skipped because they are not identity-specific; the CLI warns that they will override stored profiles during normal commands.
+
+`--all` cannot be combined with `--identity`, `--client-id`, or `--use-generic-app`. It requires at least one `[oauth.<identity>]` section in `.linear.toml`.
+
 The CLI listens for the HTTP callback and accepts a pasted callback URL at the same time. If the CLI runs on a cloud machine, container, or remote host that the user's browser cannot reach at localhost:
 
 1. Ask the user to authorize using the printed URL.
@@ -47,12 +53,17 @@ The CLI listens for the HTTP callback and accepts a pasted callback URL at the s
 
 The authorization code is single-use. The CLI verifies the callback origin, path, and OAuth state before exchanging it.
 
+Login sends `prompt=consent` so Linear returns to the callback even when the app is already installed. Without it, Linear may show an "already installed" management screen instead of issuing a new authorization code.
+
 ## Commands
 
 ```text
 lt auth login --identity codex --client-id <id>
 lt auth login --identity claude --client-id <id>
 lt auth login --identity cursor --client-id <id>
+lt auth login --all
+lt auth login --all --force
+lt auth login --identity codex --use-generic-app
 lt auth status [--identity <name>]
 lt auth list
 lt auth logout [--identity <name>]

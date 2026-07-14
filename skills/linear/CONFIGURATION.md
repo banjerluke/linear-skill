@@ -25,6 +25,6 @@ client_id = "<cursor-client-id>"
 
 Additional identities use `[oauth.<identity>]` with a `client_id`. Client IDs are public and may be committed. Never put access tokens, refresh tokens, API keys, or client secrets in `.linear.toml`.
 
-OAuth client ID precedence is `--client-id`, `<IDENTITY>_LINEAR_OAUTH_CLIENT_ID`, identity-specific `.linear.toml`, `LINEAR_OAUTH_CLIENT_ID`, `[oauth].default_client_id`, then the bundled public app.
+OAuth client ID precedence is `--client-id`, `<IDENTITY>_LINEAR_OAUTH_CLIENT_ID`, identity-specific `.linear.toml`, `LINEAR_OAUTH_CLIENT_ID`, then `[oauth].default_client_id`. The bundled generic app is selected only by the explicit `--use-generic-app` flag.
 
 Commands that accept `--team` default to `team_id` when it is configured.
