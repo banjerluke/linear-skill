@@ -9,6 +9,7 @@ import { createServer } from 'node:http';
 import { randomBytes } from 'node:crypto';
 import { readProjectConfig } from './config.mjs';
 import { getCurrentIssue, resolveIssueReference } from './current-issue.mjs';
+import { uploadLocalFile } from './upload-file.mjs';
 
 // ═══════════════════════════════ Helpers ═══════════════════════════════
 
@@ -1418,6 +1419,36 @@ cmd['attachment.create'] = async (client, _pos, opts) => {
   const p = await client.createAttachment(input);
   if (!p.success) die('Failed to create attachment');
   out({ success: true }, true);
+};
+
+cmd['attachment.upload'] = async (client, _pos, opts) => {
+  const issueRef = o(opts, 'issue');
+  const file = o(opts, 'file');
+  if (!issueRef || !file) die('--issue and --file required');
+
+  const upload = await uploadLocalFile(client, file, { makePublic: oBool(opts, 'public') });
+  const input: any = {
+    issueId: await rIssue(client, issueRef),
+    url: upload.assetUrl,
+    title: o(opts, 'title') || upload.filename,
+  };
+  if (o(opts, 'subtitle')) input.subtitle = o(opts, 'subtitle');
+  const body = await oText(opts, 'body');
+  if (body !== undefined) input.commentBody = body;
+
+  const p = await client.createAttachment(input);
+  if (!p.success) die('File uploaded, but creating the attachment failed');
+  const attachment = await p.attachment;
+  out({
+    success: true,
+    id: attachment?.id,
+    url: attachment?.url,
+    assetUrl: upload.assetUrl,
+    filename: upload.filename,
+    size: upload.size,
+    contentType: upload.contentType,
+    public: upload.public,
+  }, true);
 };
 
 cmd['attachment.delete'] = async (client, pos) => {

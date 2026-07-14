@@ -94658,6 +94658,80 @@ function resolveIssueReference(reference, cwd = process.cwd()) {
   return reference.toLowerCase() === "current" ? getCurrentIssue(cwd).identifier : reference;
 }
 
+// src/upload-file.mjs
+import { readFile, stat } from "node:fs/promises";
+import { basename, extname } from "node:path";
+var MAX_UPLOAD_SIZE = 100 * 1024 * 1024;
+var MIME_TYPES = {
+  ".bmp": "image/bmp",
+  ".csv": "text/csv",
+  ".gif": "image/gif",
+  ".html": "text/html",
+  ".jpeg": "image/jpeg",
+  ".jpg": "image/jpeg",
+  ".json": "application/json",
+  ".md": "text/markdown",
+  ".mov": "video/quicktime",
+  ".mp4": "video/mp4",
+  ".pdf": "application/pdf",
+  ".png": "image/png",
+  ".svg": "image/svg+xml",
+  ".tar": "application/x-tar",
+  ".toml": "text/toml",
+  ".tsv": "text/tab-separated-values",
+  ".txt": "text/plain",
+  ".webm": "video/webm",
+  ".webp": "image/webp",
+  ".xml": "application/xml",
+  ".yaml": "application/yaml",
+  ".yml": "application/yaml",
+  ".zip": "application/zip"
+};
+var PUBLIC_IMAGE_TYPES = /* @__PURE__ */ new Set([
+  "image/bmp",
+  "image/gif",
+  "image/jpeg",
+  "image/png",
+  "image/webp"
+]);
+function getMimeType(path) {
+  return MIME_TYPES[extname(path).toLowerCase()] || "application/octet-stream";
+}
+async function uploadLocalFile(client, path, options = {}) {
+  const info = await stat(path).catch(() => void 0);
+  if (!info?.isFile()) throw new Error(`Not a file: ${path}`);
+  if (info.size > MAX_UPLOAD_SIZE) {
+    throw new Error(`File exceeds the 100 MB upload limit: ${path}`);
+  }
+  const filename = basename(path);
+  const contentType = getMimeType(path);
+  const makePublic = options.makePublic === true;
+  if (makePublic && !PUBLIC_IMAGE_TYPES.has(contentType)) {
+    throw new Error("Public uploads are limited to PNG, JPEG, GIF, WebP, and BMP images");
+  }
+  const payload = await client.fileUpload(contentType, filename, info.size, { makePublic });
+  if (!payload.success || !payload.uploadFile) throw new Error("Linear did not provide an upload URL");
+  const upload = payload.uploadFile;
+  const headers = { "content-type": contentType };
+  for (const header of upload.headers) headers[header.key] = header.value;
+  const response = await (options.fetch || fetch)(upload.uploadUrl, {
+    method: "PUT",
+    headers,
+    body: await readFile(path)
+  });
+  if (!response.ok) {
+    const detail = await response.text().catch(() => "");
+    throw new Error(`File upload failed: ${response.status} ${response.statusText}${detail ? ` - ${detail}` : ""}`);
+  }
+  return {
+    assetUrl: upload.assetUrl,
+    filename,
+    size: info.size,
+    contentType,
+    public: makePublic
+  };
+}
+
 // src/linear.ts
 function die(msg) {
   console.error(JSON.stringify({ error: msg }));
@@ -95973,6 +96047,33 @@ cmd["attachment.create"] = async (client, _pos, opts) => {
   const p = await client.createAttachment(input);
   if (!p.success) die("Failed to create attachment");
   out({ success: true }, true);
+};
+cmd["attachment.upload"] = async (client, _pos, opts) => {
+  const issueRef = o(opts, "issue");
+  const file = o(opts, "file");
+  if (!issueRef || !file) die("--issue and --file required");
+  const upload = await uploadLocalFile(client, file, { makePublic: oBool(opts, "public") });
+  const input = {
+    issueId: await rIssue(client, issueRef),
+    url: upload.assetUrl,
+    title: o(opts, "title") || upload.filename
+  };
+  if (o(opts, "subtitle")) input.subtitle = o(opts, "subtitle");
+  const body = await oText(opts, "body");
+  if (body !== void 0) input.commentBody = body;
+  const p = await client.createAttachment(input);
+  if (!p.success) die("File uploaded, but creating the attachment failed");
+  const attachment = await p.attachment;
+  out({
+    success: true,
+    id: attachment?.id,
+    url: attachment?.url,
+    assetUrl: upload.assetUrl,
+    filename: upload.filename,
+    size: upload.size,
+    contentType: upload.contentType,
+    public: upload.public
+  }, true);
 };
 cmd["attachment.delete"] = async (client, pos) => {
   if (!pos[0]) die("Usage: linear attachment delete <id>");

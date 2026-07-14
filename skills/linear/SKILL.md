@@ -298,8 +298,11 @@ lt status get "In Progress" --team SM
 ```
 lt attachment get <id>
 lt attachment create --issue SM-123 --url "https://..." --title "Link title" [--subtitle "..."]
+lt attachment upload --issue SM-123 --file ./screenshot.png [--title "Screenshot"] [--subtitle "..."] [--body "Comment"] [--public]
 lt attachment delete <id>
 ```
+
+Local file uploads are private to workspace members by default. `--public` is an explicit opt-in and is supported only for PNG, JPEG, GIF, WebP, and BMP images. Files larger than 100 MB are rejected before upload. Use `--body-stdin` instead of `--body` for a multiline linked comment.
 
 ### Issue Relations
 
