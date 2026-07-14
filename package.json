@@ -6,7 +6,8 @@
   "private": true,
   "scripts": {
     "build": "esbuild src/linear.ts --bundle --platform=node --format=esm --target=node20 --outfile=skills/linear/bin/linear.mjs --banner:js='#!/usr/bin/env node\nimport { createRequire } from \"node:module\";\nconst require = createRequire(import.meta.url);'",
-    "check": "node --check skills/linear/bin/linear.mjs"
+    "check": "node --check skills/linear/bin/linear.mjs",
+    "test": "npm run build && node --test test/*.test.mjs"
   },
   "dependencies": {
     "@linear/sdk": "^88.1.0"

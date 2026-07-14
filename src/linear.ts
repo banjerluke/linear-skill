@@ -2,19 +2,20 @@
 // Usage: <this-file> <resource> <action> [options]
 
 import { LinearClient } from '@linear/sdk';
-import { readFileSync, existsSync, writeFileSync, mkdirSync } from 'node:fs';
+import { readFileSync, existsSync, writeFileSync, mkdirSync, renameSync, chmodSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { createServer } from 'node:http';
-import { randomBytes } from 'node:crypto';
-import { readProjectConfig } from './config.mjs';
-import { getCurrentIssue, resolveIssueReference } from './current-issue.mjs';
-import { uploadLocalFile } from './upload-file.mjs';
+import { createHash, randomBytes } from 'node:crypto';
 
 // ═══════════════════════════════ Helpers ═══════════════════════════════
 
 type Opts = Record<string, string | string[] | true>;
-type Config = { team?: string; workspace?: string };
+type Config = {
+  team?: string;
+  oauthDefaultClientId?: string;
+  oauthClientIds: Record<string, string>;
+};
 
 function die(msg: string): never {
   console.error(JSON.stringify({ error: msg }));
@@ -256,8 +257,43 @@ function oInt(opts: Opts, key: string): number | undefined {
 // ═══════════════════════════════ Auth & Config ═══════════════════════════════
 
 type Auth = { apiKey: string } | { accessToken: string };
+type Identity = { name: string; source: string };
 
 const CREDENTIALS_PATH = join(homedir(), '.config', 'linear', 'credentials.toml');
+const DEFAULT_OAUTH_SCOPES = ['read', 'write'];
+const PUBLIC_OAUTH_CLIENT_ID = '797741a4d504939df7d793838d4160d4';
+
+function normalizeIdentity(value: string): string {
+  const identity = value.trim().toLowerCase();
+  if (!/^[a-z][a-z0-9_-]*$/.test(identity)) die(`Invalid identity ${JSON.stringify(value)}. Use letters, numbers, underscores, or hyphens.`);
+  return identity;
+}
+
+function resolveIdentity(opts: Opts = {}): Identity {
+  const explicit = o(opts, 'identity');
+  if (explicit) return { name: normalizeIdentity(explicit), source: '--identity' };
+
+  const configured = process.env.LINEAR_AGENT_IDENTITY?.trim();
+  if (configured) return { name: normalizeIdentity(configured), source: 'LINEAR_AGENT_IDENTITY' };
+
+  const isCodex = !!(process.env.CODEX_THREAD_ID || process.env.CODEX_CI || process.env.CODEX_HOME);
+  const isClaude = !!(process.env.CLAUDECODE || process.env.CLAUDE_CODE_ENTRYPOINT || process.env.CLAUDE_CODE_SESSION_ID);
+  const isCursor = !!process.env.CURSOR_AGENT;
+  const detected = [isCodex && 'Codex', isClaude && 'Claude', isCursor && 'Cursor'].filter(Boolean);
+  if (detected.length > 1) die(`Cannot determine agent identity: multiple harness markers are present (${detected.join(', ')}). Set LINEAR_AGENT_IDENTITY or pass --identity.`);
+  if (isCodex) return { name: 'codex', source: 'Codex runtime' };
+  if (isClaude) return { name: 'claude', source: 'Claude Code runtime' };
+  if (isCursor) return { name: 'cursor', source: 'Cursor Agent runtime' };
+  die('Cannot determine agent identity. Pass --identity <name> or set LINEAR_AGENT_IDENTITY.');
+}
+
+function identityEnvKey(identity: string, suffix: string): string {
+  return `${identity.toUpperCase().replace(/-/g, '_')}_${suffix}`;
+}
+
+function profileSection(identity: string): string {
+  return `identity.${identity}`;
+}
 
 function readSection(content: string, name: string): Record<string, string> {
   const start = content.indexOf(`[${name}]`);
@@ -271,19 +307,54 @@ function readSection(content: string, name: string): Record<string, string> {
   return kv;
 }
 
-function writeCredentials(workspace: string, fields: Record<string, string>): void {
-  const dir = join(homedir(), '.config', 'linear');
-  mkdirSync(dir, { recursive: true });
-  const lines = [`default = "${workspace}"`, '', `[${workspace}]`];
-  for (const [k, v] of Object.entries(fields)) lines.push(`${k} = "${v}"`);
-  writeFileSync(CREDENTIALS_PATH, lines.join('\n') + '\n');
+function tomlString(value: string): string {
+  return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n')}"`;
 }
 
-async function refreshAccessToken(refreshToken: string, clientId: string, clientSecret: string): Promise<{ access_token: string; refresh_token: string; expires_in: number }> {
+function writeProfile(identity: string, fields: Record<string, string>): void {
+  const dir = join(homedir(), '.config', 'linear');
+  mkdirSync(dir, { recursive: true, mode: 0o700 });
+  const content = existsSync(CREDENTIALS_PATH) ? readFileSync(CREDENTIALS_PATH, 'utf-8') : 'version = "2"\n';
+  const sectionName = profileSection(identity);
+  const header = `[${sectionName}]`;
+  const start = content.indexOf(header);
+  let before = content.trimEnd();
+  let after = '';
+  if (start !== -1) {
+    const nextSection = content.indexOf('\n[', start + header.length);
+    before = content.slice(0, start).trimEnd();
+    after = nextSection === -1 ? '' : content.slice(nextSection + 1).trim();
+  }
+  const lines = [header];
+  for (const [key, value] of Object.entries(fields)) lines.push(`${key} = ${tomlString(value)}`);
+  const next = [before, lines.join('\n'), after].filter(Boolean).join('\n\n') + '\n';
+  const temp = `${CREDENTIALS_PATH}.${process.pid}.tmp`;
+  writeFileSync(temp, next, { mode: 0o600 });
+  renameSync(temp, CREDENTIALS_PATH);
+  chmodSync(CREDENTIALS_PATH, 0o600);
+}
+
+function deleteProfile(identity: string): void {
+  if (!existsSync(CREDENTIALS_PATH)) return;
+  const content = readFileSync(CREDENTIALS_PATH, 'utf-8');
+  const header = `[${profileSection(identity)}]`;
+  const start = content.indexOf(header);
+  if (start === -1) return;
+  const nextSection = content.indexOf('\n[', start + header.length);
+  const next = (content.slice(0, start) + (nextSection === -1 ? '' : content.slice(nextSection + 1))).trimEnd() + '\n';
+  const temp = `${CREDENTIALS_PATH}.${process.pid}.tmp`;
+  writeFileSync(temp, next, { mode: 0o600 });
+  renameSync(temp, CREDENTIALS_PATH);
+  chmodSync(CREDENTIALS_PATH, 0o600);
+}
+
+async function refreshAccessToken(refreshToken: string, clientId: string, clientSecret?: string): Promise<{ access_token: string; refresh_token: string; expires_in: number }> {
+  const body: Record<string, string> = { grant_type: 'refresh_token', refresh_token: refreshToken, client_id: clientId };
+  if (clientSecret) body.client_secret = clientSecret;
   const res = await fetch('https://api.linear.app/oauth/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: refreshToken, client_id: clientId, client_secret: clientSecret }),
+    body: new URLSearchParams(body),
   });
   if (!res.ok) die(`Token refresh failed: ${res.status} ${await res.text()}`);
   return res.json() as any;
@@ -293,7 +364,15 @@ function looksLikeOAuthToken(token: string): boolean {
   return token.startsWith('lin_oaut');
 }
 
-function getEnvAuth(): Auth | null {
+function getIdentityEnvAuth(identity: string): Auth | null {
+  const accessToken = process.env[identityEnvKey(identity, 'LINEAR_ACCESS_TOKEN')]?.trim();
+  if (accessToken) return { accessToken };
+  const apiKey = process.env[identityEnvKey(identity, 'LINEAR_API_KEY')]?.trim();
+  if (!apiKey) return null;
+  return looksLikeOAuthToken(apiKey) ? { accessToken: apiKey } : { apiKey };
+}
+
+function getGenericEnvAuth(): Auth | null {
   const accessToken = process.env.LINEAR_ACCESS_TOKEN?.trim();
   if (accessToken) return { accessToken };
 
@@ -303,14 +382,23 @@ function getEnvAuth(): Auth | null {
   return { apiKey: token };
 }
 
-function getAuth(): Auth {
-  const envAuth = getEnvAuth();
-  if (envAuth) return envAuth;
+function getAuth(identity: string): Auth {
+  const genericEnvAuth = getGenericEnvAuth();
+  if (genericEnvAuth) return genericEnvAuth;
 
-  if (!existsSync(CREDENTIALS_PATH)) die('Not authenticated. Run `linear auth login --client-id <id> --client-secret <secret>` or set LINEAR_API_KEY / LINEAR_ACCESS_TOKEN.');
-  const c = readFileSync(CREDENTIALS_PATH, 'utf-8');
+  const c = existsSync(CREDENTIALS_PATH) ? readFileSync(CREDENTIALS_PATH, 'utf-8') : '';
+  if (c) {
+    const profile = readSection(c, profileSection(identity));
+    if (profile.access_token) return { accessToken: profile.access_token };
+  }
+
+  const identityEnvAuth = getIdentityEnvAuth(identity);
+  if (identityEnvAuth) return identityEnvAuth;
+  if (!c) die(`Identity "${identity}" is not authenticated. Run \`linear auth login --identity ${identity} --client-id <id>\`.`);
+
+  // Backward compatibility for the original single-workspace credential format.
   const ws = c.match(/^default\s*=\s*"(.+?)"/m)?.[1];
-  if (!ws) die('Cannot parse default workspace from credentials.toml');
+  if (!ws) die(`No credentials found for identity "${identity}". Run \`linear auth login --identity ${identity} --client-id <id>\`.`);
   const section = readSection(c, ws);
   // Section-based OAuth credentials
   if (section.access_token) {
@@ -323,24 +411,40 @@ function getAuth(): Auth {
   return { apiKey: token };
 }
 
-async function getAuthWithRefresh(): Promise<Auth> {
-  const envAuth = getEnvAuth();
-  if (envAuth) return envAuth;
+async function getAuthWithRefresh(identity: string): Promise<Auth> {
+  const genericEnvAuth = getGenericEnvAuth();
+  if (genericEnvAuth) return genericEnvAuth;
 
-  const auth = getAuth();
+  const c = existsSync(CREDENTIALS_PATH) ? readFileSync(CREDENTIALS_PATH, 'utf-8') : '';
+  const profile = readSection(c, profileSection(identity));
+  if (profile.access_token) {
+    if (profile.token_expiry && new Date(profile.token_expiry).getTime() - Date.now() < 5 * 60 * 1000) {
+      if (!profile.refresh_token || !profile.client_id) die(`Cannot refresh identity "${identity}": missing refresh_token or client_id.`);
+      const tokens = await refreshAccessToken(profile.refresh_token, profile.client_id);
+      const tokenExpiry = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
+      writeProfile(identity, { ...profile, access_token: tokens.access_token, refresh_token: tokens.refresh_token, token_expiry: tokenExpiry });
+      return { accessToken: tokens.access_token };
+    }
+    return { accessToken: profile.access_token };
+  }
+
+  const identityEnvAuth = getIdentityEnvAuth(identity);
+  if (identityEnvAuth) return identityEnvAuth;
+
+  const auth = getAuth(identity);
   if ('apiKey' in auth) return auth;
-  // Check if OAuth token needs refresh
-  const c = readFileSync(CREDENTIALS_PATH, 'utf-8');
+
+  // Refresh credentials written by versions before identity profiles.
   const ws = c.match(/^default\s*=\s*"(.+?)"/m)?.[1]!;
   const section = readSection(c, ws);
   if (section.token_expiry) {
     const expiry = new Date(section.token_expiry);
     // Refresh if token expires within 5 minutes
     if (expiry.getTime() - Date.now() < 5 * 60 * 1000) {
-      if (!section.refresh_token || !section.client_id || !section.client_secret) die('Cannot refresh token: missing refresh_token, client_id, or client_secret in credentials');
+      if (!section.refresh_token || !section.client_id) die('Cannot refresh legacy token: missing refresh_token or client_id');
       const tokens = await refreshAccessToken(section.refresh_token, section.client_id, section.client_secret);
       const newExpiry = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
-      writeCredentials(ws, { ...section, access_token: tokens.access_token, refresh_token: tokens.refresh_token, token_expiry: newExpiry });
+      writeProfile(identity, { ...section, workspace: ws, access_token: tokens.access_token, refresh_token: tokens.refresh_token, token_expiry: newExpiry });
       return { accessToken: tokens.access_token };
     }
   }
@@ -348,7 +452,21 @@ async function getAuthWithRefresh(): Promise<Auth> {
 }
 
 function getConfig(): Config {
-  return readProjectConfig();
+  const p = join(process.cwd(), '.linear.toml');
+  if (!existsSync(p)) return { oauthClientIds: {} };
+  const c = readFileSync(p, 'utf-8');
+  const oauth = readSection(c, 'oauth');
+  const oauthClientIds: Record<string, string> = {};
+  for (const match of c.matchAll(/^\[oauth\.([a-z][a-z0-9_-]*)\]$/gm)) {
+    const identity = normalizeIdentity(match[1]);
+    const section = readSection(c, `oauth.${identity}`);
+    if (section.client_id) oauthClientIds[identity] = section.client_id;
+  }
+  return {
+    team: c.match(/^team_id\s*=\s*"(.+?)"/m)?.[1],
+    oauthDefaultClientId: oauth.default_client_id,
+    oauthClientIds,
+  };
 }
 
 // ═══════════════════════════════ CLI Parser ═══════════════════════════════
@@ -405,7 +523,6 @@ async function rUser(client: LinearClient, ref: string): Promise<string> {
 }
 
 async function rIssue(client: LinearClient, ref: string): Promise<string> {
-  ref = resolveIssueReference(ref);
   const ck = `i:${ref}`;
   if (_c.has(ck)) return _c.get(ck)!;
   if (isUUID(ref)) { _c.set(ck, ref); return ref; }
@@ -860,12 +977,6 @@ cmd['issue.search'] = async (client, _pos, opts) => {
   if (!term) die('--query required');
   const r = await client.searchIssues(term, { ...pagVars(opts) });
   outList(await Promise.all(r.nodes.map(n => fIssue(n as any))), (r as any).pageInfo);
-};
-
-cmd['issue.current'] = async (_client, _pos, opts) => {
-  const current = getCurrentIssue();
-  if (oBool(opts, 'plain')) console.log(current.identifier);
-  else out(current, true);
 };
 
 // ─── Comments ───
@@ -1421,36 +1532,6 @@ cmd['attachment.create'] = async (client, _pos, opts) => {
   out({ success: true }, true);
 };
 
-cmd['attachment.upload'] = async (client, _pos, opts) => {
-  const issueRef = o(opts, 'issue');
-  const file = o(opts, 'file');
-  if (!issueRef || !file) die('--issue and --file required');
-
-  const upload = await uploadLocalFile(client, file, { makePublic: oBool(opts, 'public') });
-  const input: any = {
-    issueId: await rIssue(client, issueRef),
-    url: upload.assetUrl,
-    title: o(opts, 'title') || upload.filename,
-  };
-  if (o(opts, 'subtitle')) input.subtitle = o(opts, 'subtitle');
-  const body = await oText(opts, 'body');
-  if (body !== undefined) input.commentBody = body;
-
-  const p = await client.createAttachment(input);
-  if (!p.success) die('File uploaded, but creating the attachment failed');
-  const attachment = await p.attachment;
-  out({
-    success: true,
-    id: attachment?.id,
-    url: attachment?.url,
-    assetUrl: upload.assetUrl,
-    filename: upload.filename,
-    size: upload.size,
-    contentType: upload.contentType,
-    public: upload.public,
-  }, true);
-};
-
 cmd['attachment.delete'] = async (client, pos) => {
   if (!pos[0]) die('Usage: linear attachment delete <id>');
   const p = await client.deleteAttachment(pos[0]);
@@ -1487,16 +1568,36 @@ cmd['graphql.query'] = async (client, _pos, opts) => {
 // ─── Auth ───
 
 async function authLogin(opts: Opts): Promise<void> {
-  const clientId = o(opts, 'client-id');
-  const clientSecret = o(opts, 'client-secret');
-  if (!clientId || !clientSecret) die('--client-id and --client-secret required');
+  const identity = resolveIdentity(opts);
+  const config = getConfig();
+  const clientId = o(opts, 'client-id')
+    || process.env[identityEnvKey(identity.name, 'LINEAR_OAUTH_CLIENT_ID')]?.trim()
+    || config.oauthClientIds[identity.name]
+    || process.env.LINEAR_OAUTH_CLIENT_ID?.trim()
+    || config.oauthDefaultClientId
+    || PUBLIC_OAUTH_CLIENT_ID;
+  if (!clientId) die(`No OAuth client ID configured for identity "${identity.name}". Pass --client-id, set ${identityEnvKey(identity.name, 'LINEAR_OAUTH_CLIENT_ID')}, or add [oauth.${identity.name}] to .linear.toml.`);
 
   const state = randomBytes(16).toString('hex');
+  const verifier = randomBytes(32).toString('base64url');
+  const challenge = createHash('sha256').update(verifier).digest('base64url');
   const port = oInt(opts, 'port') ?? 41549;
   const redirectUri = `http://localhost:${port}/callback`;
-  const authorizeUrl = `https://linear.app/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=read,write&actor=app&state=${state}`;
+  const scopes = oArr(opts, 'scope');
+  const authorizeUrl = new URL('https://linear.app/oauth/authorize');
+  authorizeUrl.search = new URLSearchParams({
+    client_id: clientId,
+    redirect_uri: redirectUri,
+    response_type: 'code',
+    scope: (scopes.length ? scopes : DEFAULT_OAUTH_SCOPES).join(','),
+    actor: 'app',
+    state,
+    code_challenge: challenge,
+    code_challenge_method: 'S256',
+  }).toString();
 
-  console.error(`\nOpen this URL in your browser to authorize:\n\n  ${authorizeUrl}\n\nWaiting for callback on port ${port}...`);
+  console.error(`\nAuthenticating identity "${identity.name}" (${identity.source}).`);
+  console.error(`Open this URL in your browser to authorize:\n\n  ${authorizeUrl.toString()}\n\nWaiting for callback on port ${port}...`);
 
   const code = await new Promise<string>((resolve, reject) => {
     const timeout = setTimeout(() => { srv.close(); reject(new Error('Timed out waiting for authorization (5 min)')); }, 5 * 60 * 1000);
@@ -1515,14 +1616,15 @@ async function authLogin(opts: Opts): Promise<void> {
       srv.close();
       resolve(authCode);
     });
-    srv.listen(port);
+    srv.once('error', reject);
+    srv.listen(port, 'localhost');
   });
 
   // Exchange code for tokens
   const tokenRes = await fetch('https://api.linear.app/oauth/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({ grant_type: 'authorization_code', code, redirect_uri: redirectUri, client_id: clientId, client_secret: clientSecret }),
+    body: new URLSearchParams({ grant_type: 'authorization_code', code, redirect_uri: redirectUri, client_id: clientId, code_verifier: verifier }),
   });
   if (!tokenRes.ok) die(`Token exchange failed: ${tokenRes.status} ${await tokenRes.text()}`);
   const tokens = await tokenRes.json() as { access_token: string; refresh_token?: string; expires_in: number };
@@ -1538,41 +1640,107 @@ async function authLogin(opts: Opts): Promise<void> {
   const orgName = gql.data?.organization?.name || workspace;
 
   const expiry = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
-  const fields: Record<string, string> = { access_token: tokens.access_token, token_expiry: expiry, client_id: clientId, client_secret: clientSecret };
+  const fields: Record<string, string> = {
+    workspace,
+    organization: orgName,
+    client_id: clientId,
+    actor: 'app',
+    scopes: (scopes.length ? scopes : DEFAULT_OAUTH_SCOPES).join(','),
+    access_token: tokens.access_token,
+    token_expiry: expiry,
+  };
   if (tokens.refresh_token) fields.refresh_token = tokens.refresh_token;
-  writeCredentials(workspace, fields);
+  writeProfile(identity.name, fields);
 
-  console.error(`\nAuthenticated with workspace "${orgName}" (${workspace}).`);
+  console.error(`\nIdentity "${identity.name}" authenticated with workspace "${orgName}" (${workspace}).`);
   console.error(`Credentials saved to ${CREDENTIALS_PATH}`);
-  out({ success: true, workspace, organization: orgName }, false);
+  out({ success: true, identity: identity.name, workspace, organization: orgName, actor: 'app' }, false);
 }
 
-function authStatus(): void {
+function authStatus(opts: Opts): void {
+  const identity = resolveIdentity(opts);
   const accessToken = process.env.LINEAR_ACCESS_TOKEN?.trim();
   if (accessToken) {
-    out({ type: 'oauth', source: 'LINEAR_ACCESS_TOKEN env var', hasRefreshToken: false }, false);
+    out({ identity: identity.name, identitySource: identity.source, type: 'oauth', source: 'LINEAR_ACCESS_TOKEN', hasRefreshToken: false }, false);
     return;
   }
 
   const envToken = process.env.LINEAR_API_KEY?.trim();
   if (envToken) {
-    if (looksLikeOAuthToken(envToken)) out({ type: 'oauth', source: 'LINEAR_API_KEY env var (oauth access token)', hasRefreshToken: false }, false);
-    else out({ type: 'api_key', source: 'LINEAR_API_KEY env var' }, false);
+    if (looksLikeOAuthToken(envToken)) out({ identity: identity.name, identitySource: identity.source, type: 'oauth', source: 'LINEAR_API_KEY (OAuth access token)', hasRefreshToken: false }, false);
+    else out({ identity: identity.name, identitySource: identity.source, type: 'api_key', source: 'LINEAR_API_KEY' }, false);
     return;
   }
 
-  if (!existsSync(CREDENTIALS_PATH)) die('Not authenticated. Run `linear auth login`.');
-  const c = readFileSync(CREDENTIALS_PATH, 'utf-8');
+  const c = existsSync(CREDENTIALS_PATH) ? readFileSync(CREDENTIALS_PATH, 'utf-8') : '';
+  const profile = readSection(c, profileSection(identity.name));
+  if (profile.access_token) {
+    const expiry = profile.token_expiry ? new Date(profile.token_expiry) : null;
+    out({
+      identity: identity.name,
+      identitySource: identity.source,
+      type: 'oauth',
+      actor: profile.actor || 'app',
+      workspace: profile.workspace || null,
+      organization: profile.organization || null,
+      scopes: profile.scopes?.split(',') || [],
+      tokenExpiry: profile.token_expiry || null,
+      expired: expiry ? expiry.getTime() < Date.now() : false,
+      hasRefreshToken: !!profile.refresh_token,
+    }, false);
+    return;
+  }
+
+  const identityAccessToken = process.env[identityEnvKey(identity.name, 'LINEAR_ACCESS_TOKEN')]?.trim();
+  if (identityAccessToken) {
+    out({ identity: identity.name, identitySource: identity.source, type: 'oauth', source: identityEnvKey(identity.name, 'LINEAR_ACCESS_TOKEN'), hasRefreshToken: false }, false);
+    return;
+  }
+  const identityApiKey = process.env[identityEnvKey(identity.name, 'LINEAR_API_KEY')]?.trim();
+  if (identityApiKey) {
+    out({ identity: identity.name, identitySource: identity.source, type: looksLikeOAuthToken(identityApiKey) ? 'oauth' : 'api_key', source: identityEnvKey(identity.name, 'LINEAR_API_KEY'), hasRefreshToken: false }, false);
+    return;
+  }
+
   const ws = c.match(/^default\s*=\s*"(.+?)"/m)?.[1];
-  if (!ws) die('Cannot parse credentials.toml');
+  if (!ws) die(`Identity "${identity.name}" is not authenticated. Run \`linear auth login --identity ${identity.name} --client-id <id>\`.`);
   const section = readSection(c, ws);
   if (section.access_token) {
     const expiry = section.token_expiry ? new Date(section.token_expiry) : null;
     const expired = expiry ? expiry.getTime() < Date.now() : false;
-    out({ type: 'oauth', workspace: ws, tokenExpiry: section.token_expiry || null, expired, hasRefreshToken: !!section.refresh_token }, false);
+    out({ identity: identity.name, identitySource: identity.source, type: 'oauth', workspace: ws, tokenExpiry: section.token_expiry || null, expired, hasRefreshToken: !!section.refresh_token, source: 'legacy credentials' }, false);
   } else {
-    out({ type: 'api_key', workspace: ws, source: 'credentials.toml (legacy)' }, false);
+    out({ identity: identity.name, identitySource: identity.source, type: 'api_key', workspace: ws, source: 'legacy credentials' }, false);
   }
+}
+
+function authList(): void {
+  if (!existsSync(CREDENTIALS_PATH)) return out([], false);
+  const content = readFileSync(CREDENTIALS_PATH, 'utf-8');
+  const identities = [...content.matchAll(/^\[identity\.([a-z][a-z0-9_-]*)\]$/gm)].map(match => {
+    const profile = readSection(content, profileSection(match[1]));
+    return { identity: match[1], workspace: profile.workspace || null, organization: profile.organization || null, actor: profile.actor || 'app' };
+  });
+  out(identities, false);
+}
+
+async function authLogout(opts: Opts): Promise<void> {
+  const identity = resolveIdentity(opts);
+  if (!existsSync(CREDENTIALS_PATH)) die(`Identity "${identity.name}" is not authenticated.`);
+  const content = readFileSync(CREDENTIALS_PATH, 'utf-8');
+  const profile = readSection(content, profileSection(identity.name));
+  if (!profile.access_token && !profile.refresh_token) die(`No identity-specific credentials found for "${identity.name}".`);
+
+  const token = profile.refresh_token || profile.access_token;
+  const tokenType = profile.refresh_token ? 'refresh_token' : 'access_token';
+  const response = await fetch('https://api.linear.app/oauth/revoke', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ token, token_type_hint: tokenType }),
+  });
+  if (!response.ok && response.status !== 400) die(`Token revocation failed: ${response.status} ${await response.text()}`);
+  deleteProfile(identity.name);
+  out({ success: true, identity: identity.name }, false);
 }
 
 // ═══════════════════════════════ Main ═══════════════════════════════
@@ -1583,19 +1751,14 @@ async function main() {
   // Auth commands don't need an existing token
   if (resource === 'auth') {
     if (action === 'login') return authLogin(opts);
-    if (action === 'status') return authStatus();
-    die('Unknown auth action. Available: login, status');
+    if (action === 'status') return authStatus(opts);
+    if (action === 'list') return authList();
+    if (action === 'logout') return authLogout(opts);
+    die('Unknown auth action. Available: login, status, list, logout');
   }
 
-  // Resolving the current issue is a local Git operation and needs no Linear credentials.
-  if (resource === 'issue' && action === 'current') {
-    const current = getCurrentIssue();
-    if (oBool(opts, 'plain')) console.log(current.identifier);
-    else out(current, true);
-    return;
-  }
-
-  const auth = await getAuthWithRefresh();
+  const identity = resolveIdentity(opts);
+  const auth = await getAuthWithRefresh(identity.name);
   const config = getConfig();
   const client = new LinearClient(auth);
 

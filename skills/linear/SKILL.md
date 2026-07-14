@@ -13,7 +13,7 @@ license: MIT
 
 CLI tool wrapping `@linear/sdk` for Linear issue tracking.
 
-**Requirements:** Node.js 20+ and either a Linear OAuth app or Linear API token.
+**Requirements:** Node.js 20+. A custom Linear OAuth app client ID or Linear API token is optional because the skill includes a public OAuth fallback.
 
 **IMPORTANT - Path Resolution:**
 This skill can be installed in different locations. Before executing any commands, determine the skill directory based on where you loaded this SKILL.md file, and use that path in all commands below. Replace `$SKILL_DIR` with the actual discovered path.
@@ -22,30 +22,79 @@ This skill can be installed in different locations. Before executing any command
 
 `lt` is used throughout this doc as shorthand for the full invocation path.
 
-**Config:** Reads `.linear.toml` from CWD or the Git repository root for defaults (`team_id`, `workspace`). Auth from `~/.config/linear/credentials.toml`.
+**Config:** Reads `.linear.toml` from CWD for `team_id` and OAuth client ID overrides. Auth from `~/.config/linear/credentials.toml`.
 
 ## Authentication
 
 Supports two auth methods:
 
-1. **OAuth (recommended)** — Actions attributed to the app, not your personal account. Uses `actor=app` for a separate agent identity.
-2. **Env Token** — Set `LINEAR_ACCESS_TOKEN` (OAuth access token) or `LINEAR_API_KEY` (API token).
+1. **OAuth with PKCE (recommended)** — No client secret is required. Actions are attributed to the selected app identity using `actor=app`.
+2. **Env Token** — API keys act as the Linear user; OAuth access tokens retain the actor encoded at authorization. Set an identity-specific token such as `CODEX_LINEAR_ACCESS_TOKEN` or `CLAUDE_LINEAR_ACCESS_TOKEN`, or use the generic `LINEAR_ACCESS_TOKEN` / `LINEAR_API_KEY` fallback.
    - If `LINEAR_API_KEY` starts with `lin_oaut`, the tool treats it as an OAuth access token automatically.
+
+The CLI keeps separate credential profiles for agent identities. It detects Codex, Claude Code, and Cursor Agent when their runtime markers are present. Pass `--identity <name>` or set `LINEAR_AGENT_IDENTITY` when running manually, nesting one agent inside another, or using another harness. Explicit identity selection always wins.
 
 ### OAuth Setup
 
+Create one Linear OAuth application for each identity that should appear separately in Linear. For example, create `Codex`, `Claude Code`, and `Cursor` applications with their own names, icons, and client IDs.
+
 1. Go to Linear Settings → API → OAuth Applications → New
-2. Set callback URL to `http://localhost` (any port is accepted)
-3. Run: `lt auth login --client-id <id> --client-secret <secret>`
-4. Open the printed URL in your browser and authorize
-5. Tokens are saved to `~/.config/linear/credentials.toml` with automatic refresh
+2. Set the callback URL to `http://localhost:41549/callback`
+3. Configure client IDs in `.linear.toml` or pass `--client-id` explicitly
+4. Run `lt auth login --identity codex`, `lt auth login --identity claude`, and `lt auth login --identity cursor`
+5. Open each printed URL and authorize the app installation
+6. Tokens are saved by identity in `~/.config/linear/credentials.toml` with automatic refresh
+
+```toml
+[oauth.codex]
+client_id = "<codex-client-id>"
+
+[oauth.claude]
+client_id = "<claude-client-id>"
+
+[oauth.cursor]
+client_id = "<cursor-client-id>"
+```
+
+Use `[oauth] default_client_id = "<id>"` as a project-level fallback for identities without their own section. The bundled neutral public OAuth app is the final fallback.
+
+The client ID is public. PKCE protects the authorization-code exchange, so no client secret is supplied or stored. To make an app assignable or mentionable, add the corresponding scopes during login: `--scope read --scope write --scope app:assignable --scope app:mentionable`.
 
 ### Auth Commands
 
 ```
-lt auth login --client-id <id> --client-secret <secret>
-lt auth status
+lt auth login --identity codex --client-id <id>
+lt auth login --identity claude --client-id <id>
+lt auth login --identity cursor --client-id <id>
+lt auth status [--identity <name>]
+lt auth list
+lt auth logout [--identity <name>]
 ```
+
+## Project Configuration
+
+The complete `.linear.toml` schema is:
+
+```toml
+# Optional default for commands that accept --team.
+team_id = "ENG"
+
+[oauth]
+default_client_id = "<project-default-client-id>"
+
+[oauth.codex]
+client_id = "<codex-client-id>"
+
+[oauth.claude]
+client_id = "<claude-client-id>"
+
+[oauth.cursor]
+client_id = "<cursor-client-id>"
+```
+
+Additional identities use `[oauth.<identity>]` with a `client_id`. Client IDs are public and may be committed. Never put access tokens, refresh tokens, API keys, or client secrets in `.linear.toml`.
+
+Client ID precedence: `--client-id`, `<IDENTITY>_LINEAR_OAUTH_CLIENT_ID`, identity-specific `.linear.toml`, `LINEAR_OAUTH_CLIENT_ID`, `[oauth].default_client_id`, bundled public app.
 
 ## Output Format
 
@@ -63,7 +112,6 @@ lt auth status
 The tool auto-resolves human-friendly references to UUIDs:
 
 - Issues: `SM-123` -> UUID (via branch search)
-- Current issue: use the explicit reference `current` to resolve an identifier from the Git branch
 - Teams: `SM` -> UUID (by key or name)
 - Users: `me` -> current user; names/emails resolved by search
 - Projects: by name (exact then fuzzy)
@@ -81,8 +129,6 @@ Use `none` to clear nullable fields (assignee, project, parent).
 ```
 lt issue list [--team SM] [--assignee me] [--state started] [--project "Name"] [--label "Bug"] [--query "text"] [--parent SM-100] [--cycle current] [--created-after 2026-01-01] [--updated-after 2026-01-01] [--limit 50] [--cursor X] [--include-archived]
 lt issue get SM-123 [--json] [--no-comments] [--include-relations]
-lt issue current [--plain]
-lt issue get current [--json]
 lt issue create --title "Title" [--team SM] [--description "..."] [--state "Planned"] [--assignee me] [--priority 2] [--label "Bug"] [--label "UI"] [--project "Name"] [--parent SM-100] [--cycle current] [--milestone "M1"] [--estimate 3] [--due-date 2026-03-01]
 lt issue update SM-123 [--title "New"] [--state "In Progress"] [--assignee me] [--priority 1] [--label "Bug"] [--add-label "UI"] [--remove-label "Old"] [--project "Name"] [--due-date 2026-03-01]
 lt issue delete SM-123
@@ -90,8 +136,6 @@ lt issue search --query "search term" [--limit 20]
 ```
 
 `issue search` does full-text search across all fields (title, description, comments). `issue list --query` filters by title only.
-
-`issue current` is local and does not require authentication. It extracts an identifier such as `ENG-123` from the current Git branch. Commands never infer the current issue from an omitted argument; pass the literal reference `current` to opt in.
 
 ### Prefer Stdin for Markdown/Text Bodies
 
@@ -298,11 +342,8 @@ lt status get "In Progress" --team SM
 ```
 lt attachment get <id>
 lt attachment create --issue SM-123 --url "https://..." --title "Link title" [--subtitle "..."]
-lt attachment upload --issue SM-123 --file ./screenshot.png [--title "Screenshot"] [--subtitle "..."] [--body "Comment"] [--public]
 lt attachment delete <id>
 ```
-
-Local file uploads are private to workspace members by default. `--public` is an explicit opt-in and is supported only for PNG, JPEG, GIF, WebP, and BMP images. Files larger than 100 MB are rejected before upload. Use `--body-stdin` instead of `--body` for a multiline linked comment.
 
 ### Issue Relations
 
@@ -320,7 +361,8 @@ lt graphql query --query '{ viewer { id name } }' [--variables '{"key":"value"}'
 ## Notes
 
 - `lt` = `$SKILL_DIR/bin/linear.mjs`
-- Env auth precedence: `LINEAR_ACCESS_TOKEN` first, then `LINEAR_API_KEY`
+- Identity selection precedence: `--identity`, `LINEAR_AGENT_IDENTITY`, then conservative Codex/Claude Code/Cursor detection
+- Auth precedence: generic `LINEAR_ACCESS_TOKEN` / `LINEAR_API_KEY` overrides, refreshable identity profile, identity-specific env fallback
 - Priority: 0=None, 1=Urgent, 2=High, 3=Normal, 4=Low
 - `issue get` and `issue read` include comments by default; use `--no-comments` to suppress
 - Project states: `planned`, `started`, `paused`, `completed`, `canceled`, `backlog`

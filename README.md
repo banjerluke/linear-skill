@@ -23,18 +23,33 @@ Replace `codex` with another supported agent name if needed, or omit `-g` to ins
 ## Requirements
 
 - Node.js 20+
-- A Linear OAuth application or Linear API token
+- Optional: a custom Linear OAuth application client ID or Linear API token
 
 ## Authentication
 
-OAuth is recommended because actions are attributed to the app identity:
+OAuth with PKCE is recommended because it needs no client secret and actions are attributed to the app identity. Create a separate Linear OAuth application for every identity that should appear independently in Linear, such as Codex, Claude Code, and Cursor. Configure each callback URL as `http://localhost:41549/callback`.
 
-```bash
-lt auth login --client-id <id> --client-secret <secret>
-lt auth status
+```toml
+[oauth.codex]
+client_id = "<codex-client-id>"
+
+[oauth.claude]
+client_id = "<claude-client-id>"
+
+[oauth.cursor]
+client_id = "<cursor-client-id>"
 ```
 
-The callback URL for the Linear OAuth app can be `http://localhost`; any port is accepted.
+```bash
+lt auth login --identity codex
+lt auth login --identity claude
+lt auth login --identity cursor
+lt auth list
+```
+
+During normal commands, the CLI detects Codex, Claude Code, or Cursor Agent from runtime markers and selects that identity's credentials. For manual shells, nested agents, or other harnesses, pass `--identity <name>` or set `LINEAR_AGENT_IDENTITY`. Explicit selection always wins.
+
+The client ID is public. The CLI generates a fresh PKCE verifier for login and stores only the resulting access and refresh tokens. To make the identity assignable or mentionable, log in with `--scope read --scope write --scope app:assignable --scope app:mentionable`.
 
 You can also authenticate with an environment variable:
 
@@ -44,7 +59,38 @@ export LINEAR_ACCESS_TOKEN=<oauth-access-token>
 export LINEAR_API_KEY=<api-key>
 ```
 
-OAuth credentials are stored at `~/.config/linear/credentials.toml`.
+Identity-specific variables such as `CODEX_LINEAR_ACCESS_TOKEN` and `CLAUDE_LINEAR_ACCESS_TOKEN` are supported as fallbacks. A stored, refreshable identity profile takes precedence so an expired inherited token cannot shadow a completed PKCE login. Generic `LINEAR_ACCESS_TOKEN` and `LINEAR_API_KEY` remain explicit overrides.
+
+OAuth credentials are stored by identity at `~/.config/linear/credentials.toml`. The file is written atomically with user-only permissions.
+
+API keys remain supported for users who want actions attributed to their own Linear account. OAuth logins use `actor=app` and are attributed to the selected application identity.
+
+## Project Configuration
+
+The complete `.linear.toml` schema is:
+
+```toml
+# Optional default for commands that accept --team.
+team_id = "ENG"
+
+# Optional project fallback for identities without a dedicated OAuth app.
+[oauth]
+default_client_id = "<project-default-client-id>"
+
+# Optional identity-specific public OAuth client IDs.
+[oauth.codex]
+client_id = "<codex-client-id>"
+
+[oauth.claude]
+client_id = "<claude-client-id>"
+
+[oauth.cursor]
+client_id = "<cursor-client-id>"
+```
+
+Additional identities use the same `[oauth.<identity>]` shape. Client IDs are public and may be committed; access tokens, refresh tokens, API keys, and client secrets must not be placed in `.linear.toml`.
+
+OAuth client ID precedence is `--client-id`, identity-specific environment variable, identity-specific `.linear.toml`, generic environment variable, project default, then the bundled public app.
 
 ## Local Development
 

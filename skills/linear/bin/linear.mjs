@@ -2,10 +2,10 @@
 import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 
-// ../../../Users/luke/Code/skills/linear-agent-skill/node_modules/@linear/sdk/dist/chunk-DPPnyiuk.mjs
+// node_modules/@linear/sdk/dist/chunk-DPPnyiuk.mjs
 var __commonJSMin = (cb, mod) => () => (mod || cb((mod = { exports: {} }).exports, mod), mod.exports);
 
-// ../../../Users/luke/Code/skills/linear-agent-skill/node_modules/@linear/sdk/dist/index.mjs
+// node_modules/@linear/sdk/dist/index.mjs
 var LinearErrorType = /* @__PURE__ */ (function(LinearErrorType$1) {
   LinearErrorType$1["FeatureNotAccessible"] = "FeatureNotAccessible";
   LinearErrorType$1["InvalidInput"] = "InvalidInput";
@@ -763,24 +763,24 @@ var require_printer = /* @__PURE__ */ __commonJSMin(((exports) => {
       return "$" + node.name;
     },
     Document: function Document$1(node) {
-      return join3(node.definitions, "\n\n") + "\n";
+      return join2(node.definitions, "\n\n") + "\n";
     },
     OperationDefinition: function OperationDefinition(node) {
       var op = node.operation;
       var name = node.name;
-      var varDefs = wrap("(", join3(node.variableDefinitions, ", "), ")");
-      var directives = join3(node.directives, " ");
+      var varDefs = wrap("(", join2(node.variableDefinitions, ", "), ")");
+      var directives = join2(node.directives, " ");
       var selectionSet = node.selectionSet;
-      return !name && !directives && !varDefs && op === "query" ? selectionSet : join3([
+      return !name && !directives && !varDefs && op === "query" ? selectionSet : join2([
         op,
-        join3([name, varDefs]),
+        join2([name, varDefs]),
         directives,
         selectionSet
       ], " ");
     },
     VariableDefinition: function VariableDefinition(_ref) {
       var variable = _ref.variable, type = _ref.type, defaultValue = _ref.defaultValue, directives = _ref.directives;
-      return variable + ": " + type + wrap(" = ", defaultValue) + wrap(" ", join3(directives, " "));
+      return variable + ": " + type + wrap(" = ", defaultValue) + wrap(" ", join2(directives, " "));
     },
     SelectionSet: function SelectionSet(_ref2) {
       var selections = _ref2.selections;
@@ -789,11 +789,11 @@ var require_printer = /* @__PURE__ */ __commonJSMin(((exports) => {
     Field: function Field(_ref3) {
       var alias = _ref3.alias, name = _ref3.name, args = _ref3.arguments, directives = _ref3.directives, selectionSet = _ref3.selectionSet;
       var prefix = wrap("", alias, ": ") + name;
-      var argsLine = prefix + wrap("(", join3(args, ", "), ")");
-      if (argsLine.length > MAX_LINE_LENGTH) argsLine = prefix + wrap("(\n", indent(join3(args, "\n")), "\n)");
-      return join3([
+      var argsLine = prefix + wrap("(", join2(args, ", "), ")");
+      if (argsLine.length > MAX_LINE_LENGTH) argsLine = prefix + wrap("(\n", indent(join2(args, "\n")), "\n)");
+      return join2([
         argsLine,
-        join3(directives, " "),
+        join2(directives, " "),
         selectionSet
       ], " ");
     },
@@ -803,20 +803,20 @@ var require_printer = /* @__PURE__ */ __commonJSMin(((exports) => {
     },
     FragmentSpread: function FragmentSpread(_ref5) {
       var name = _ref5.name, directives = _ref5.directives;
-      return "..." + name + wrap(" ", join3(directives, " "));
+      return "..." + name + wrap(" ", join2(directives, " "));
     },
     InlineFragment: function InlineFragment(_ref6) {
       var typeCondition = _ref6.typeCondition, directives = _ref6.directives, selectionSet = _ref6.selectionSet;
-      return join3([
+      return join2([
         "...",
         wrap("on ", typeCondition),
-        join3(directives, " "),
+        join2(directives, " "),
         selectionSet
       ], " ");
     },
     FragmentDefinition: function FragmentDefinition(_ref7) {
       var name = _ref7.name, typeCondition = _ref7.typeCondition, variableDefinitions = _ref7.variableDefinitions, directives = _ref7.directives, selectionSet = _ref7.selectionSet;
-      return "fragment ".concat(name).concat(wrap("(", join3(variableDefinitions, ", "), ")"), " ") + "on ".concat(typeCondition, " ").concat(wrap("", join3(directives, " "), " ")) + selectionSet;
+      return "fragment ".concat(name).concat(wrap("(", join2(variableDefinitions, ", "), ")"), " ") + "on ".concat(typeCondition, " ").concat(wrap("", join2(directives, " "), " ")) + selectionSet;
     },
     IntValue: function IntValue(_ref8) {
       return _ref8.value;
@@ -839,11 +839,11 @@ var require_printer = /* @__PURE__ */ __commonJSMin(((exports) => {
     },
     ListValue: function ListValue(_ref13) {
       var values = _ref13.values;
-      return "[" + join3(values, ", ") + "]";
+      return "[" + join2(values, ", ") + "]";
     },
     ObjectValue: function ObjectValue(_ref14) {
       var fields = _ref14.fields;
-      return "{" + join3(fields, ", ") + "}";
+      return "{" + join2(fields, ", ") + "}";
     },
     ObjectField: function ObjectField(_ref15) {
       var name = _ref15.name, value = _ref15.value;
@@ -851,7 +851,7 @@ var require_printer = /* @__PURE__ */ __commonJSMin(((exports) => {
     },
     Directive: function Directive(_ref16) {
       var name = _ref16.name, args = _ref16.arguments;
-      return "@" + name + wrap("(", join3(args, ", "), ")");
+      return "@" + name + wrap("(", join2(args, ", "), ")");
     },
     NamedType: function NamedType(_ref17) {
       return _ref17.name;
@@ -864,9 +864,9 @@ var require_printer = /* @__PURE__ */ __commonJSMin(((exports) => {
     },
     SchemaDefinition: addDescription(function(_ref20) {
       var directives = _ref20.directives, operationTypes = _ref20.operationTypes;
-      return join3([
+      return join2([
         "schema",
-        join3(directives, " "),
+        join2(directives, " "),
         block(operationTypes)
       ], " ");
     }),
@@ -876,149 +876,149 @@ var require_printer = /* @__PURE__ */ __commonJSMin(((exports) => {
     },
     ScalarTypeDefinition: addDescription(function(_ref22) {
       var name = _ref22.name, directives = _ref22.directives;
-      return join3([
+      return join2([
         "scalar",
         name,
-        join3(directives, " ")
+        join2(directives, " ")
       ], " ");
     }),
     ObjectTypeDefinition: addDescription(function(_ref23) {
       var name = _ref23.name, interfaces = _ref23.interfaces, directives = _ref23.directives, fields = _ref23.fields;
-      return join3([
+      return join2([
         "type",
         name,
-        wrap("implements ", join3(interfaces, " & ")),
-        join3(directives, " "),
+        wrap("implements ", join2(interfaces, " & ")),
+        join2(directives, " "),
         block(fields)
       ], " ");
     }),
     FieldDefinition: addDescription(function(_ref24) {
       var name = _ref24.name, args = _ref24.arguments, type = _ref24.type, directives = _ref24.directives;
-      return name + (hasMultilineItems(args) ? wrap("(\n", indent(join3(args, "\n")), "\n)") : wrap("(", join3(args, ", "), ")")) + ": " + type + wrap(" ", join3(directives, " "));
+      return name + (hasMultilineItems(args) ? wrap("(\n", indent(join2(args, "\n")), "\n)") : wrap("(", join2(args, ", "), ")")) + ": " + type + wrap(" ", join2(directives, " "));
     }),
     InputValueDefinition: addDescription(function(_ref25) {
       var name = _ref25.name, type = _ref25.type, defaultValue = _ref25.defaultValue, directives = _ref25.directives;
-      return join3([
+      return join2([
         name + ": " + type,
         wrap("= ", defaultValue),
-        join3(directives, " ")
+        join2(directives, " ")
       ], " ");
     }),
     InterfaceTypeDefinition: addDescription(function(_ref26) {
       var name = _ref26.name, interfaces = _ref26.interfaces, directives = _ref26.directives, fields = _ref26.fields;
-      return join3([
+      return join2([
         "interface",
         name,
-        wrap("implements ", join3(interfaces, " & ")),
-        join3(directives, " "),
+        wrap("implements ", join2(interfaces, " & ")),
+        join2(directives, " "),
         block(fields)
       ], " ");
     }),
     UnionTypeDefinition: addDescription(function(_ref27) {
       var name = _ref27.name, directives = _ref27.directives, types = _ref27.types;
-      return join3([
+      return join2([
         "union",
         name,
-        join3(directives, " "),
-        types && types.length !== 0 ? "= " + join3(types, " | ") : ""
+        join2(directives, " "),
+        types && types.length !== 0 ? "= " + join2(types, " | ") : ""
       ], " ");
     }),
     EnumTypeDefinition: addDescription(function(_ref28) {
       var name = _ref28.name, directives = _ref28.directives, values = _ref28.values;
-      return join3([
+      return join2([
         "enum",
         name,
-        join3(directives, " "),
+        join2(directives, " "),
         block(values)
       ], " ");
     }),
     EnumValueDefinition: addDescription(function(_ref29) {
       var name = _ref29.name, directives = _ref29.directives;
-      return join3([name, join3(directives, " ")], " ");
+      return join2([name, join2(directives, " ")], " ");
     }),
     InputObjectTypeDefinition: addDescription(function(_ref30) {
       var name = _ref30.name, directives = _ref30.directives, fields = _ref30.fields;
-      return join3([
+      return join2([
         "input",
         name,
-        join3(directives, " "),
+        join2(directives, " "),
         block(fields)
       ], " ");
     }),
     DirectiveDefinition: addDescription(function(_ref31) {
       var name = _ref31.name, args = _ref31.arguments, repeatable = _ref31.repeatable, locations = _ref31.locations;
-      return "directive @" + name + (hasMultilineItems(args) ? wrap("(\n", indent(join3(args, "\n")), "\n)") : wrap("(", join3(args, ", "), ")")) + (repeatable ? " repeatable" : "") + " on " + join3(locations, " | ");
+      return "directive @" + name + (hasMultilineItems(args) ? wrap("(\n", indent(join2(args, "\n")), "\n)") : wrap("(", join2(args, ", "), ")")) + (repeatable ? " repeatable" : "") + " on " + join2(locations, " | ");
     }),
     SchemaExtension: function SchemaExtension(_ref32) {
       var directives = _ref32.directives, operationTypes = _ref32.operationTypes;
-      return join3([
+      return join2([
         "extend schema",
-        join3(directives, " "),
+        join2(directives, " "),
         block(operationTypes)
       ], " ");
     },
     ScalarTypeExtension: function ScalarTypeExtension(_ref33) {
       var name = _ref33.name, directives = _ref33.directives;
-      return join3([
+      return join2([
         "extend scalar",
         name,
-        join3(directives, " ")
+        join2(directives, " ")
       ], " ");
     },
     ObjectTypeExtension: function ObjectTypeExtension(_ref34) {
       var name = _ref34.name, interfaces = _ref34.interfaces, directives = _ref34.directives, fields = _ref34.fields;
-      return join3([
+      return join2([
         "extend type",
         name,
-        wrap("implements ", join3(interfaces, " & ")),
-        join3(directives, " "),
+        wrap("implements ", join2(interfaces, " & ")),
+        join2(directives, " "),
         block(fields)
       ], " ");
     },
     InterfaceTypeExtension: function InterfaceTypeExtension(_ref35) {
       var name = _ref35.name, interfaces = _ref35.interfaces, directives = _ref35.directives, fields = _ref35.fields;
-      return join3([
+      return join2([
         "extend interface",
         name,
-        wrap("implements ", join3(interfaces, " & ")),
-        join3(directives, " "),
+        wrap("implements ", join2(interfaces, " & ")),
+        join2(directives, " "),
         block(fields)
       ], " ");
     },
     UnionTypeExtension: function UnionTypeExtension(_ref36) {
       var name = _ref36.name, directives = _ref36.directives, types = _ref36.types;
-      return join3([
+      return join2([
         "extend union",
         name,
-        join3(directives, " "),
-        types && types.length !== 0 ? "= " + join3(types, " | ") : ""
+        join2(directives, " "),
+        types && types.length !== 0 ? "= " + join2(types, " | ") : ""
       ], " ");
     },
     EnumTypeExtension: function EnumTypeExtension(_ref37) {
       var name = _ref37.name, directives = _ref37.directives, values = _ref37.values;
-      return join3([
+      return join2([
         "extend enum",
         name,
-        join3(directives, " "),
+        join2(directives, " "),
         block(values)
       ], " ");
     },
     InputObjectTypeExtension: function InputObjectTypeExtension(_ref38) {
       var name = _ref38.name, directives = _ref38.directives, fields = _ref38.fields;
-      return join3([
+      return join2([
         "extend input",
         name,
-        join3(directives, " "),
+        join2(directives, " "),
         block(fields)
       ], " ");
     }
   };
   function addDescription(cb) {
     return function(node) {
-      return join3([node.description, cb(node)], "\n");
+      return join2([node.description, cb(node)], "\n");
     };
   }
-  function join3(maybeArray) {
+  function join2(maybeArray) {
     var _maybeArray$filter$jo;
     var separator = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : "";
     return (_maybeArray$filter$jo = maybeArray === null || maybeArray === void 0 ? void 0 : maybeArray.filter(function(x) {
@@ -1026,7 +1026,7 @@ var require_printer = /* @__PURE__ */ __commonJSMin(((exports) => {
     }).join(separator)) !== null && _maybeArray$filter$jo !== void 0 ? _maybeArray$filter$jo : "";
   }
   function block(array) {
-    return wrap("{\n", indent(join3(array, "\n")), "\n}");
+    return wrap("{\n", indent(join2(array, "\n")), "\n}");
   }
   function wrap(start, maybeString) {
     var end = arguments.length > 2 && arguments[2] !== void 0 ? arguments[2] : "";
@@ -94595,144 +94595,11 @@ var LinearClient = class extends LinearSdk {
 };
 
 // src/linear.ts
-import { readFileSync as readFileSync2, existsSync as existsSync2, writeFileSync, mkdirSync } from "node:fs";
-import { join as join2 } from "node:path";
+import { readFileSync, existsSync, writeFileSync, mkdirSync, renameSync, chmodSync } from "node:fs";
+import { join } from "node:path";
 import { homedir } from "node:os";
 import { createServer } from "node:http";
-import { randomBytes } from "node:crypto";
-
-// src/config.mjs
-import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
-import { join, resolve } from "node:path";
-function findConfigPath(cwd = process.cwd()) {
-  const currentDir = resolve(cwd);
-  const localPath = join(currentDir, ".linear.toml");
-  if (existsSync(localPath)) return localPath;
-  try {
-    const root = execFileSync("git", ["rev-parse", "--show-toplevel"], {
-      cwd: currentDir,
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"]
-    }).trim();
-    const rootPath = join(root, ".linear.toml");
-    if (root !== currentDir && existsSync(rootPath)) return rootPath;
-  } catch {
-  }
-  return void 0;
-}
-function readProjectConfig(cwd = process.cwd()) {
-  const path = findConfigPath(cwd);
-  if (!path) return {};
-  const content = readFileSync(path, "utf8");
-  return {
-    team: content.match(/^team_id\s*=\s*"(.+?)"/m)?.[1],
-    workspace: content.match(/^workspace\s*=\s*"(.+?)"/m)?.[1]
-  };
-}
-
-// src/current-issue.mjs
-import { execFileSync as execFileSync2 } from "node:child_process";
-var ISSUE_IDENTIFIER = /\b([a-zA-Z0-9]+)-([1-9][0-9]*)\b/;
-function getCurrentIssue(cwd = process.cwd()) {
-  let branch;
-  try {
-    branch = execFileSync2("git", ["branch", "--show-current"], {
-      cwd,
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"]
-    }).trim();
-  } catch {
-    throw new Error("Cannot determine the current issue outside a Git worktree");
-  }
-  if (!branch) throw new Error("Cannot determine the current issue from a detached HEAD");
-  const match = branch.match(ISSUE_IDENTIFIER);
-  if (!match) throw new Error(`Current branch does not contain a Linear issue identifier: ${branch}`);
-  return {
-    identifier: `${match[1].toUpperCase()}-${match[2]}`,
-    branch,
-    source: "git-branch"
-  };
-}
-function resolveIssueReference(reference, cwd = process.cwd()) {
-  return reference.toLowerCase() === "current" ? getCurrentIssue(cwd).identifier : reference;
-}
-
-// src/upload-file.mjs
-import { readFile, stat } from "node:fs/promises";
-import { basename, extname } from "node:path";
-var MAX_UPLOAD_SIZE = 100 * 1024 * 1024;
-var MIME_TYPES = {
-  ".bmp": "image/bmp",
-  ".csv": "text/csv",
-  ".gif": "image/gif",
-  ".html": "text/html",
-  ".jpeg": "image/jpeg",
-  ".jpg": "image/jpeg",
-  ".json": "application/json",
-  ".md": "text/markdown",
-  ".mov": "video/quicktime",
-  ".mp4": "video/mp4",
-  ".pdf": "application/pdf",
-  ".png": "image/png",
-  ".svg": "image/svg+xml",
-  ".tar": "application/x-tar",
-  ".toml": "text/toml",
-  ".tsv": "text/tab-separated-values",
-  ".txt": "text/plain",
-  ".webm": "video/webm",
-  ".webp": "image/webp",
-  ".xml": "application/xml",
-  ".yaml": "application/yaml",
-  ".yml": "application/yaml",
-  ".zip": "application/zip"
-};
-var PUBLIC_IMAGE_TYPES = /* @__PURE__ */ new Set([
-  "image/bmp",
-  "image/gif",
-  "image/jpeg",
-  "image/png",
-  "image/webp"
-]);
-function getMimeType(path) {
-  return MIME_TYPES[extname(path).toLowerCase()] || "application/octet-stream";
-}
-async function uploadLocalFile(client, path, options = {}) {
-  const info = await stat(path).catch(() => void 0);
-  if (!info?.isFile()) throw new Error(`Not a file: ${path}`);
-  if (info.size > MAX_UPLOAD_SIZE) {
-    throw new Error(`File exceeds the 100 MB upload limit: ${path}`);
-  }
-  const filename = basename(path);
-  const contentType = getMimeType(path);
-  const makePublic = options.makePublic === true;
-  if (makePublic && !PUBLIC_IMAGE_TYPES.has(contentType)) {
-    throw new Error("Public uploads are limited to PNG, JPEG, GIF, WebP, and BMP images");
-  }
-  const payload = await client.fileUpload(contentType, filename, info.size, { makePublic });
-  if (!payload.success || !payload.uploadFile) throw new Error("Linear did not provide an upload URL");
-  const upload = payload.uploadFile;
-  const headers = { "content-type": contentType };
-  for (const header of upload.headers) headers[header.key] = header.value;
-  const response = await (options.fetch || fetch)(upload.uploadUrl, {
-    method: "PUT",
-    headers,
-    body: await readFile(path)
-  });
-  if (!response.ok) {
-    const detail = await response.text().catch(() => "");
-    throw new Error(`File upload failed: ${response.status} ${response.statusText}${detail ? ` - ${detail}` : ""}`);
-  }
-  return {
-    assetUrl: upload.assetUrl,
-    filename,
-    size: info.size,
-    contentType,
-    public: makePublic
-  };
-}
-
-// src/linear.ts
+import { createHash, randomBytes } from "node:crypto";
 function die(msg) {
   console.error(JSON.stringify({ error: msg }));
   process.exit(1);
@@ -94762,10 +94629,10 @@ async function safe(fn) {
 }
 var isUUID = (s) => /^[0-9a-f]{8}-/.test(s);
 function readStdin() {
-  return new Promise((resolve2, reject) => {
+  return new Promise((resolve, reject) => {
     const chunks = [];
     process.stdin.on("data", (c) => chunks.push(c));
-    process.stdin.on("end", () => resolve2(Buffer.concat(chunks).toString()));
+    process.stdin.on("end", () => resolve(Buffer.concat(chunks).toString()));
     process.stdin.on("error", reject);
   });
 }
@@ -94939,7 +94806,35 @@ function oInt(opts, key) {
   const v = o(opts, key);
   return v ? parseInt(v) : void 0;
 }
-var CREDENTIALS_PATH = join2(homedir(), ".config", "linear", "credentials.toml");
+var CREDENTIALS_PATH = join(homedir(), ".config", "linear", "credentials.toml");
+var DEFAULT_OAUTH_SCOPES = ["read", "write"];
+var PUBLIC_OAUTH_CLIENT_ID = "797741a4d504939df7d793838d4160d4";
+function normalizeIdentity(value) {
+  const identity = value.trim().toLowerCase();
+  if (!/^[a-z][a-z0-9_-]*$/.test(identity)) die(`Invalid identity ${JSON.stringify(value)}. Use letters, numbers, underscores, or hyphens.`);
+  return identity;
+}
+function resolveIdentity(opts = {}) {
+  const explicit = o(opts, "identity");
+  if (explicit) return { name: normalizeIdentity(explicit), source: "--identity" };
+  const configured = process.env.LINEAR_AGENT_IDENTITY?.trim();
+  if (configured) return { name: normalizeIdentity(configured), source: "LINEAR_AGENT_IDENTITY" };
+  const isCodex = !!(process.env.CODEX_THREAD_ID || process.env.CODEX_CI || process.env.CODEX_HOME);
+  const isClaude = !!(process.env.CLAUDECODE || process.env.CLAUDE_CODE_ENTRYPOINT || process.env.CLAUDE_CODE_SESSION_ID);
+  const isCursor = !!process.env.CURSOR_AGENT;
+  const detected = [isCodex && "Codex", isClaude && "Claude", isCursor && "Cursor"].filter(Boolean);
+  if (detected.length > 1) die(`Cannot determine agent identity: multiple harness markers are present (${detected.join(", ")}). Set LINEAR_AGENT_IDENTITY or pass --identity.`);
+  if (isCodex) return { name: "codex", source: "Codex runtime" };
+  if (isClaude) return { name: "claude", source: "Claude Code runtime" };
+  if (isCursor) return { name: "cursor", source: "Cursor Agent runtime" };
+  die("Cannot determine agent identity. Pass --identity <name> or set LINEAR_AGENT_IDENTITY.");
+}
+function identityEnvKey(identity, suffix) {
+  return `${identity.toUpperCase().replace(/-/g, "_")}_${suffix}`;
+}
+function profileSection(identity) {
+  return `identity.${identity}`;
+}
 function readSection(content, name) {
   const start = content.indexOf(`[${name}]`);
   if (start === -1) return {};
@@ -94951,18 +94846,51 @@ function readSection(content, name) {
   for (const m of block.matchAll(/^(\w+)\s*=\s*"(.+?)"/gm)) kv[m[1]] = m[2];
   return kv;
 }
-function writeCredentials(workspace, fields) {
-  const dir = join2(homedir(), ".config", "linear");
-  mkdirSync(dir, { recursive: true });
-  const lines = [`default = "${workspace}"`, "", `[${workspace}]`];
-  for (const [k, v] of Object.entries(fields)) lines.push(`${k} = "${v}"`);
-  writeFileSync(CREDENTIALS_PATH, lines.join("\n") + "\n");
+function tomlString(value) {
+  return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n")}"`;
+}
+function writeProfile(identity, fields) {
+  const dir = join(homedir(), ".config", "linear");
+  mkdirSync(dir, { recursive: true, mode: 448 });
+  const content = existsSync(CREDENTIALS_PATH) ? readFileSync(CREDENTIALS_PATH, "utf-8") : 'version = "2"\n';
+  const sectionName = profileSection(identity);
+  const header = `[${sectionName}]`;
+  const start = content.indexOf(header);
+  let before = content.trimEnd();
+  let after = "";
+  if (start !== -1) {
+    const nextSection = content.indexOf("\n[", start + header.length);
+    before = content.slice(0, start).trimEnd();
+    after = nextSection === -1 ? "" : content.slice(nextSection + 1).trim();
+  }
+  const lines = [header];
+  for (const [key, value] of Object.entries(fields)) lines.push(`${key} = ${tomlString(value)}`);
+  const next = [before, lines.join("\n"), after].filter(Boolean).join("\n\n") + "\n";
+  const temp = `${CREDENTIALS_PATH}.${process.pid}.tmp`;
+  writeFileSync(temp, next, { mode: 384 });
+  renameSync(temp, CREDENTIALS_PATH);
+  chmodSync(CREDENTIALS_PATH, 384);
+}
+function deleteProfile(identity) {
+  if (!existsSync(CREDENTIALS_PATH)) return;
+  const content = readFileSync(CREDENTIALS_PATH, "utf-8");
+  const header = `[${profileSection(identity)}]`;
+  const start = content.indexOf(header);
+  if (start === -1) return;
+  const nextSection = content.indexOf("\n[", start + header.length);
+  const next = (content.slice(0, start) + (nextSection === -1 ? "" : content.slice(nextSection + 1))).trimEnd() + "\n";
+  const temp = `${CREDENTIALS_PATH}.${process.pid}.tmp`;
+  writeFileSync(temp, next, { mode: 384 });
+  renameSync(temp, CREDENTIALS_PATH);
+  chmodSync(CREDENTIALS_PATH, 384);
 }
 async function refreshAccessToken(refreshToken, clientId, clientSecret) {
+  const body = { grant_type: "refresh_token", refresh_token: refreshToken, client_id: clientId };
+  if (clientSecret) body.client_secret = clientSecret;
   const res = await fetch("https://api.linear.app/oauth/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: refreshToken, client_id: clientId, client_secret: clientSecret })
+    body: new URLSearchParams(body)
   });
   if (!res.ok) die(`Token refresh failed: ${res.status} ${await res.text()}`);
   return res.json();
@@ -94970,7 +94898,14 @@ async function refreshAccessToken(refreshToken, clientId, clientSecret) {
 function looksLikeOAuthToken(token) {
   return token.startsWith("lin_oaut");
 }
-function getEnvAuth() {
+function getIdentityEnvAuth(identity) {
+  const accessToken = process.env[identityEnvKey(identity, "LINEAR_ACCESS_TOKEN")]?.trim();
+  if (accessToken) return { accessToken };
+  const apiKey = process.env[identityEnvKey(identity, "LINEAR_API_KEY")]?.trim();
+  if (!apiKey) return null;
+  return looksLikeOAuthToken(apiKey) ? { accessToken: apiKey } : { apiKey };
+}
+function getGenericEnvAuth() {
   const accessToken = process.env.LINEAR_ACCESS_TOKEN?.trim();
   if (accessToken) return { accessToken };
   const token = process.env.LINEAR_API_KEY?.trim();
@@ -94978,13 +94913,19 @@ function getEnvAuth() {
   if (looksLikeOAuthToken(token)) return { accessToken: token };
   return { apiKey: token };
 }
-function getAuth() {
-  const envAuth = getEnvAuth();
-  if (envAuth) return envAuth;
-  if (!existsSync2(CREDENTIALS_PATH)) die("Not authenticated. Run `linear auth login --client-id <id> --client-secret <secret>` or set LINEAR_API_KEY / LINEAR_ACCESS_TOKEN.");
-  const c = readFileSync2(CREDENTIALS_PATH, "utf-8");
+function getAuth(identity) {
+  const genericEnvAuth = getGenericEnvAuth();
+  if (genericEnvAuth) return genericEnvAuth;
+  const c = existsSync(CREDENTIALS_PATH) ? readFileSync(CREDENTIALS_PATH, "utf-8") : "";
+  if (c) {
+    const profile = readSection(c, profileSection(identity));
+    if (profile.access_token) return { accessToken: profile.access_token };
+  }
+  const identityEnvAuth = getIdentityEnvAuth(identity);
+  if (identityEnvAuth) return identityEnvAuth;
+  if (!c) die(`Identity "${identity}" is not authenticated. Run \`linear auth login --identity ${identity} --client-id <id>\`.`);
   const ws = c.match(/^default\s*=\s*"(.+?)"/m)?.[1];
-  if (!ws) die("Cannot parse default workspace from credentials.toml");
+  if (!ws) die(`No credentials found for identity "${identity}". Run \`linear auth login --identity ${identity} --client-id <id>\`.`);
   const section = readSection(c, ws);
   if (section.access_token) {
     return { accessToken: section.access_token };
@@ -94994,28 +94935,55 @@ function getAuth() {
   if (looksLikeOAuthToken(token)) return { accessToken: token };
   return { apiKey: token };
 }
-async function getAuthWithRefresh() {
-  const envAuth = getEnvAuth();
-  if (envAuth) return envAuth;
-  const auth = getAuth();
+async function getAuthWithRefresh(identity) {
+  const genericEnvAuth = getGenericEnvAuth();
+  if (genericEnvAuth) return genericEnvAuth;
+  const c = existsSync(CREDENTIALS_PATH) ? readFileSync(CREDENTIALS_PATH, "utf-8") : "";
+  const profile = readSection(c, profileSection(identity));
+  if (profile.access_token) {
+    if (profile.token_expiry && new Date(profile.token_expiry).getTime() - Date.now() < 5 * 60 * 1e3) {
+      if (!profile.refresh_token || !profile.client_id) die(`Cannot refresh identity "${identity}": missing refresh_token or client_id.`);
+      const tokens = await refreshAccessToken(profile.refresh_token, profile.client_id);
+      const tokenExpiry = new Date(Date.now() + tokens.expires_in * 1e3).toISOString();
+      writeProfile(identity, { ...profile, access_token: tokens.access_token, refresh_token: tokens.refresh_token, token_expiry: tokenExpiry });
+      return { accessToken: tokens.access_token };
+    }
+    return { accessToken: profile.access_token };
+  }
+  const identityEnvAuth = getIdentityEnvAuth(identity);
+  if (identityEnvAuth) return identityEnvAuth;
+  const auth = getAuth(identity);
   if ("apiKey" in auth) return auth;
-  const c = readFileSync2(CREDENTIALS_PATH, "utf-8");
   const ws = c.match(/^default\s*=\s*"(.+?)"/m)?.[1];
   const section = readSection(c, ws);
   if (section.token_expiry) {
     const expiry = new Date(section.token_expiry);
     if (expiry.getTime() - Date.now() < 5 * 60 * 1e3) {
-      if (!section.refresh_token || !section.client_id || !section.client_secret) die("Cannot refresh token: missing refresh_token, client_id, or client_secret in credentials");
+      if (!section.refresh_token || !section.client_id) die("Cannot refresh legacy token: missing refresh_token or client_id");
       const tokens = await refreshAccessToken(section.refresh_token, section.client_id, section.client_secret);
       const newExpiry = new Date(Date.now() + tokens.expires_in * 1e3).toISOString();
-      writeCredentials(ws, { ...section, access_token: tokens.access_token, refresh_token: tokens.refresh_token, token_expiry: newExpiry });
+      writeProfile(identity, { ...section, workspace: ws, access_token: tokens.access_token, refresh_token: tokens.refresh_token, token_expiry: newExpiry });
       return { accessToken: tokens.access_token };
     }
   }
   return auth;
 }
 function getConfig() {
-  return readProjectConfig();
+  const p = join(process.cwd(), ".linear.toml");
+  if (!existsSync(p)) return { oauthClientIds: {} };
+  const c = readFileSync(p, "utf-8");
+  const oauth = readSection(c, "oauth");
+  const oauthClientIds = {};
+  for (const match of c.matchAll(/^\[oauth\.([a-z][a-z0-9_-]*)\]$/gm)) {
+    const identity = normalizeIdentity(match[1]);
+    const section = readSection(c, `oauth.${identity}`);
+    if (section.client_id) oauthClientIds[identity] = section.client_id;
+  }
+  return {
+    team: c.match(/^team_id\s*=\s*"(.+?)"/m)?.[1],
+    oauthDefaultClientId: oauth.default_client_id,
+    oauthClientIds
+  };
 }
 function parseArgs() {
   const [resource, action, ...rest] = process.argv.slice(2);
@@ -95074,7 +95042,6 @@ async function rUser(client, ref) {
   return users.nodes[0].id;
 }
 async function rIssue(client, ref) {
-  ref = resolveIssueReference(ref);
   const ck = `i:${ref}`;
   if (_c.has(ck)) return _c.get(ck);
   if (isUUID(ref)) {
@@ -95555,11 +95522,6 @@ cmd["issue.search"] = async (client, _pos, opts) => {
   if (!term) die("--query required");
   const r = await client.searchIssues(term, { ...pagVars(opts) });
   outList(await Promise.all(r.nodes.map((n) => fIssue(n))), r.pageInfo);
-};
-cmd["issue.current"] = async (_client, _pos, opts) => {
-  const current = getCurrentIssue();
-  if (oBool(opts, "plain")) console.log(current.identifier);
-  else out(current, true);
 };
 cmd["comment.list"] = async (client, _pos, opts) => {
   if (!o(opts, "issue")) die("--issue required");
@@ -96048,33 +96010,6 @@ cmd["attachment.create"] = async (client, _pos, opts) => {
   if (!p.success) die("Failed to create attachment");
   out({ success: true }, true);
 };
-cmd["attachment.upload"] = async (client, _pos, opts) => {
-  const issueRef = o(opts, "issue");
-  const file = o(opts, "file");
-  if (!issueRef || !file) die("--issue and --file required");
-  const upload = await uploadLocalFile(client, file, { makePublic: oBool(opts, "public") });
-  const input = {
-    issueId: await rIssue(client, issueRef),
-    url: upload.assetUrl,
-    title: o(opts, "title") || upload.filename
-  };
-  if (o(opts, "subtitle")) input.subtitle = o(opts, "subtitle");
-  const body = await oText(opts, "body");
-  if (body !== void 0) input.commentBody = body;
-  const p = await client.createAttachment(input);
-  if (!p.success) die("File uploaded, but creating the attachment failed");
-  const attachment = await p.attachment;
-  out({
-    success: true,
-    id: attachment?.id,
-    url: attachment?.url,
-    assetUrl: upload.assetUrl,
-    filename: upload.filename,
-    size: upload.size,
-    contentType: upload.contentType,
-    public: upload.public
-  }, true);
-};
 cmd["attachment.delete"] = async (client, pos) => {
   if (!pos[0]) die("Usage: linear attachment delete <id>");
   const p = await client.deleteAttachment(pos[0]);
@@ -96101,20 +96036,35 @@ cmd["graphql.query"] = async (client, _pos, opts) => {
   out(result, true);
 };
 async function authLogin(opts) {
-  const clientId = o(opts, "client-id");
-  const clientSecret = o(opts, "client-secret");
-  if (!clientId || !clientSecret) die("--client-id and --client-secret required");
+  const identity = resolveIdentity(opts);
+  const config = getConfig();
+  const clientId = o(opts, "client-id") || process.env[identityEnvKey(identity.name, "LINEAR_OAUTH_CLIENT_ID")]?.trim() || config.oauthClientIds[identity.name] || process.env.LINEAR_OAUTH_CLIENT_ID?.trim() || config.oauthDefaultClientId || PUBLIC_OAUTH_CLIENT_ID;
+  if (!clientId) die(`No OAuth client ID configured for identity "${identity.name}". Pass --client-id, set ${identityEnvKey(identity.name, "LINEAR_OAUTH_CLIENT_ID")}, or add [oauth.${identity.name}] to .linear.toml.`);
   const state = randomBytes(16).toString("hex");
+  const verifier = randomBytes(32).toString("base64url");
+  const challenge = createHash("sha256").update(verifier).digest("base64url");
   const port = oInt(opts, "port") ?? 41549;
   const redirectUri = `http://localhost:${port}/callback`;
-  const authorizeUrl = `https://linear.app/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=read,write&actor=app&state=${state}`;
+  const scopes = oArr(opts, "scope");
+  const authorizeUrl = new URL("https://linear.app/oauth/authorize");
+  authorizeUrl.search = new URLSearchParams({
+    client_id: clientId,
+    redirect_uri: redirectUri,
+    response_type: "code",
+    scope: (scopes.length ? scopes : DEFAULT_OAUTH_SCOPES).join(","),
+    actor: "app",
+    state,
+    code_challenge: challenge,
+    code_challenge_method: "S256"
+  }).toString();
   console.error(`
-Open this URL in your browser to authorize:
+Authenticating identity "${identity.name}" (${identity.source}).`);
+  console.error(`Open this URL in your browser to authorize:
 
-  ${authorizeUrl}
+  ${authorizeUrl.toString()}
 
 Waiting for callback on port ${port}...`);
-  const code = await new Promise((resolve2, reject) => {
+  const code = await new Promise((resolve, reject) => {
     const timeout = setTimeout(() => {
       srv.close();
       reject(new Error("Timed out waiting for authorization (5 min)"));
@@ -96157,14 +96107,15 @@ Waiting for callback on port ${port}...`);
       res.end("<h2>Authorization successful!</h2><p>You can close this tab.</p>");
       clearTimeout(timeout);
       srv.close();
-      resolve2(authCode);
+      resolve(authCode);
     });
-    srv.listen(port);
+    srv.once("error", reject);
+    srv.listen(port, "localhost");
   });
   const tokenRes = await fetch("https://api.linear.app/oauth/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ grant_type: "authorization_code", code, redirect_uri: redirectUri, client_id: clientId, client_secret: clientSecret })
+    body: new URLSearchParams({ grant_type: "authorization_code", code, redirect_uri: redirectUri, client_id: clientId, code_verifier: verifier })
   });
   if (!tokenRes.ok) die(`Token exchange failed: ${tokenRes.status} ${await tokenRes.text()}`);
   const tokens = await tokenRes.json();
@@ -96177,53 +96128,111 @@ Waiting for callback on port ${port}...`);
   const workspace = gql.data?.organization?.urlKey || "default";
   const orgName = gql.data?.organization?.name || workspace;
   const expiry = new Date(Date.now() + tokens.expires_in * 1e3).toISOString();
-  const fields = { access_token: tokens.access_token, token_expiry: expiry, client_id: clientId, client_secret: clientSecret };
+  const fields = {
+    workspace,
+    organization: orgName,
+    client_id: clientId,
+    actor: "app",
+    scopes: (scopes.length ? scopes : DEFAULT_OAUTH_SCOPES).join(","),
+    access_token: tokens.access_token,
+    token_expiry: expiry
+  };
   if (tokens.refresh_token) fields.refresh_token = tokens.refresh_token;
-  writeCredentials(workspace, fields);
+  writeProfile(identity.name, fields);
   console.error(`
-Authenticated with workspace "${orgName}" (${workspace}).`);
+Identity "${identity.name}" authenticated with workspace "${orgName}" (${workspace}).`);
   console.error(`Credentials saved to ${CREDENTIALS_PATH}`);
-  out({ success: true, workspace, organization: orgName }, false);
+  out({ success: true, identity: identity.name, workspace, organization: orgName, actor: "app" }, false);
 }
-function authStatus() {
+function authStatus(opts) {
+  const identity = resolveIdentity(opts);
   const accessToken = process.env.LINEAR_ACCESS_TOKEN?.trim();
   if (accessToken) {
-    out({ type: "oauth", source: "LINEAR_ACCESS_TOKEN env var", hasRefreshToken: false }, false);
+    out({ identity: identity.name, identitySource: identity.source, type: "oauth", source: "LINEAR_ACCESS_TOKEN", hasRefreshToken: false }, false);
     return;
   }
   const envToken = process.env.LINEAR_API_KEY?.trim();
   if (envToken) {
-    if (looksLikeOAuthToken(envToken)) out({ type: "oauth", source: "LINEAR_API_KEY env var (oauth access token)", hasRefreshToken: false }, false);
-    else out({ type: "api_key", source: "LINEAR_API_KEY env var" }, false);
+    if (looksLikeOAuthToken(envToken)) out({ identity: identity.name, identitySource: identity.source, type: "oauth", source: "LINEAR_API_KEY (OAuth access token)", hasRefreshToken: false }, false);
+    else out({ identity: identity.name, identitySource: identity.source, type: "api_key", source: "LINEAR_API_KEY" }, false);
     return;
   }
-  if (!existsSync2(CREDENTIALS_PATH)) die("Not authenticated. Run `linear auth login`.");
-  const c = readFileSync2(CREDENTIALS_PATH, "utf-8");
+  const c = existsSync(CREDENTIALS_PATH) ? readFileSync(CREDENTIALS_PATH, "utf-8") : "";
+  const profile = readSection(c, profileSection(identity.name));
+  if (profile.access_token) {
+    const expiry = profile.token_expiry ? new Date(profile.token_expiry) : null;
+    out({
+      identity: identity.name,
+      identitySource: identity.source,
+      type: "oauth",
+      actor: profile.actor || "app",
+      workspace: profile.workspace || null,
+      organization: profile.organization || null,
+      scopes: profile.scopes?.split(",") || [],
+      tokenExpiry: profile.token_expiry || null,
+      expired: expiry ? expiry.getTime() < Date.now() : false,
+      hasRefreshToken: !!profile.refresh_token
+    }, false);
+    return;
+  }
+  const identityAccessToken = process.env[identityEnvKey(identity.name, "LINEAR_ACCESS_TOKEN")]?.trim();
+  if (identityAccessToken) {
+    out({ identity: identity.name, identitySource: identity.source, type: "oauth", source: identityEnvKey(identity.name, "LINEAR_ACCESS_TOKEN"), hasRefreshToken: false }, false);
+    return;
+  }
+  const identityApiKey = process.env[identityEnvKey(identity.name, "LINEAR_API_KEY")]?.trim();
+  if (identityApiKey) {
+    out({ identity: identity.name, identitySource: identity.source, type: looksLikeOAuthToken(identityApiKey) ? "oauth" : "api_key", source: identityEnvKey(identity.name, "LINEAR_API_KEY"), hasRefreshToken: false }, false);
+    return;
+  }
   const ws = c.match(/^default\s*=\s*"(.+?)"/m)?.[1];
-  if (!ws) die("Cannot parse credentials.toml");
+  if (!ws) die(`Identity "${identity.name}" is not authenticated. Run \`linear auth login --identity ${identity.name} --client-id <id>\`.`);
   const section = readSection(c, ws);
   if (section.access_token) {
     const expiry = section.token_expiry ? new Date(section.token_expiry) : null;
     const expired = expiry ? expiry.getTime() < Date.now() : false;
-    out({ type: "oauth", workspace: ws, tokenExpiry: section.token_expiry || null, expired, hasRefreshToken: !!section.refresh_token }, false);
+    out({ identity: identity.name, identitySource: identity.source, type: "oauth", workspace: ws, tokenExpiry: section.token_expiry || null, expired, hasRefreshToken: !!section.refresh_token, source: "legacy credentials" }, false);
   } else {
-    out({ type: "api_key", workspace: ws, source: "credentials.toml (legacy)" }, false);
+    out({ identity: identity.name, identitySource: identity.source, type: "api_key", workspace: ws, source: "legacy credentials" }, false);
   }
+}
+function authList() {
+  if (!existsSync(CREDENTIALS_PATH)) return out([], false);
+  const content = readFileSync(CREDENTIALS_PATH, "utf-8");
+  const identities = [...content.matchAll(/^\[identity\.([a-z][a-z0-9_-]*)\]$/gm)].map((match) => {
+    const profile = readSection(content, profileSection(match[1]));
+    return { identity: match[1], workspace: profile.workspace || null, organization: profile.organization || null, actor: profile.actor || "app" };
+  });
+  out(identities, false);
+}
+async function authLogout(opts) {
+  const identity = resolveIdentity(opts);
+  if (!existsSync(CREDENTIALS_PATH)) die(`Identity "${identity.name}" is not authenticated.`);
+  const content = readFileSync(CREDENTIALS_PATH, "utf-8");
+  const profile = readSection(content, profileSection(identity.name));
+  if (!profile.access_token && !profile.refresh_token) die(`No identity-specific credentials found for "${identity.name}".`);
+  const token = profile.refresh_token || profile.access_token;
+  const tokenType = profile.refresh_token ? "refresh_token" : "access_token";
+  const response = await fetch("https://api.linear.app/oauth/revoke", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ token, token_type_hint: tokenType })
+  });
+  if (!response.ok && response.status !== 400) die(`Token revocation failed: ${response.status} ${await response.text()}`);
+  deleteProfile(identity.name);
+  out({ success: true, identity: identity.name }, false);
 }
 async function main() {
   const { resource, action, pos, opts } = parseArgs();
   if (resource === "auth") {
     if (action === "login") return authLogin(opts);
-    if (action === "status") return authStatus();
-    die("Unknown auth action. Available: login, status");
+    if (action === "status") return authStatus(opts);
+    if (action === "list") return authList();
+    if (action === "logout") return authLogout(opts);
+    die("Unknown auth action. Available: login, status, list, logout");
   }
-  if (resource === "issue" && action === "current") {
-    const current = getCurrentIssue();
-    if (oBool(opts, "plain")) console.log(current.identifier);
-    else out(current, true);
-    return;
-  }
-  const auth = await getAuthWithRefresh();
+  const identity = resolveIdentity(opts);
+  const auth = await getAuthWithRefresh(identity.name);
   const config = getConfig();
   const client = new LinearClient(auth);
   const key = `${resource}.${action}`;
