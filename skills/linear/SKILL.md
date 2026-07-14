@@ -22,7 +22,7 @@ This skill can be installed in different locations. Before executing any command
 
 `lt` is used throughout this doc as shorthand for the full invocation path.
 
-**Config:** Reads `.linear.toml` from CWD for `team_id` and OAuth client ID overrides. Auth from `~/.config/linear/credentials.toml`.
+**Config:** Reads `.linear.toml` from CWD or the Git repository root for `team_id` and OAuth client ID overrides. Auth from `~/.config/linear/credentials.toml`.
 
 ## Authentication
 
@@ -112,6 +112,7 @@ Client ID precedence: `--client-id`, `<IDENTITY>_LINEAR_OAUTH_CLIENT_ID`, identi
 The tool auto-resolves human-friendly references to UUIDs:
 
 - Issues: `SM-123` -> UUID (via branch search)
+- Current issue: use the explicit reference `current` to resolve an identifier from the Git branch
 - Teams: `SM` -> UUID (by key or name)
 - Users: `me` -> current user; names/emails resolved by search
 - Projects: by name (exact then fuzzy)
@@ -129,6 +130,8 @@ Use `none` to clear nullable fields (assignee, project, parent).
 ```
 lt issue list [--team SM] [--assignee me] [--state started] [--project "Name"] [--label "Bug"] [--query "text"] [--parent SM-100] [--cycle current] [--created-after 2026-01-01] [--updated-after 2026-01-01] [--limit 50] [--cursor X] [--include-archived]
 lt issue get SM-123 [--json] [--no-comments] [--include-relations]
+lt issue current [--plain]
+lt issue get current [--json]
 lt issue create --title "Title" [--team SM] [--description "..."] [--state "Planned"] [--assignee me] [--priority 2] [--label "Bug"] [--label "UI"] [--project "Name"] [--parent SM-100] [--cycle current] [--milestone "M1"] [--estimate 3] [--due-date 2026-03-01]
 lt issue update SM-123 [--title "New"] [--state "In Progress"] [--assignee me] [--priority 1] [--label "Bug"] [--add-label "UI"] [--remove-label "Old"] [--project "Name"] [--due-date 2026-03-01]
 lt issue delete SM-123
@@ -136,6 +139,8 @@ lt issue search --query "search term" [--limit 20]
 ```
 
 `issue search` does full-text search across all fields (title, description, comments). `issue list --query` filters by title only.
+
+`issue current` is local and does not require authentication. It extracts an identifier such as `ENG-123` from the current Git branch. Commands never infer the current issue from an omitted argument; pass the literal reference `current` to opt in.
 
 ### Prefer Stdin for Markdown/Text Bodies
 
@@ -342,8 +347,11 @@ lt status get "In Progress" --team SM
 ```
 lt attachment get <id>
 lt attachment create --issue SM-123 --url "https://..." --title "Link title" [--subtitle "..."]
+lt attachment upload --issue SM-123 --file ./screenshot.png [--title "Screenshot"] [--subtitle "..."] [--body "Comment"] [--public]
 lt attachment delete <id>
 ```
+
+Local file uploads are private to workspace members by default. `--public` is an explicit opt-in and is supported only for PNG, JPEG, GIF, WebP, and BMP images. Files larger than 100 MB are rejected before upload. Use `--body-stdin` instead of `--body` for a multiline linked comment.
 
 ### Issue Relations
 

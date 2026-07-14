@@ -763,24 +763,24 @@ var require_printer = /* @__PURE__ */ __commonJSMin(((exports) => {
       return "$" + node.name;
     },
     Document: function Document$1(node) {
-      return join2(node.definitions, "\n\n") + "\n";
+      return join3(node.definitions, "\n\n") + "\n";
     },
     OperationDefinition: function OperationDefinition(node) {
       var op = node.operation;
       var name = node.name;
-      var varDefs = wrap("(", join2(node.variableDefinitions, ", "), ")");
-      var directives = join2(node.directives, " ");
+      var varDefs = wrap("(", join3(node.variableDefinitions, ", "), ")");
+      var directives = join3(node.directives, " ");
       var selectionSet = node.selectionSet;
-      return !name && !directives && !varDefs && op === "query" ? selectionSet : join2([
+      return !name && !directives && !varDefs && op === "query" ? selectionSet : join3([
         op,
-        join2([name, varDefs]),
+        join3([name, varDefs]),
         directives,
         selectionSet
       ], " ");
     },
     VariableDefinition: function VariableDefinition(_ref) {
       var variable = _ref.variable, type = _ref.type, defaultValue = _ref.defaultValue, directives = _ref.directives;
-      return variable + ": " + type + wrap(" = ", defaultValue) + wrap(" ", join2(directives, " "));
+      return variable + ": " + type + wrap(" = ", defaultValue) + wrap(" ", join3(directives, " "));
     },
     SelectionSet: function SelectionSet(_ref2) {
       var selections = _ref2.selections;
@@ -789,11 +789,11 @@ var require_printer = /* @__PURE__ */ __commonJSMin(((exports) => {
     Field: function Field(_ref3) {
       var alias = _ref3.alias, name = _ref3.name, args = _ref3.arguments, directives = _ref3.directives, selectionSet = _ref3.selectionSet;
       var prefix = wrap("", alias, ": ") + name;
-      var argsLine = prefix + wrap("(", join2(args, ", "), ")");
-      if (argsLine.length > MAX_LINE_LENGTH) argsLine = prefix + wrap("(\n", indent(join2(args, "\n")), "\n)");
-      return join2([
+      var argsLine = prefix + wrap("(", join3(args, ", "), ")");
+      if (argsLine.length > MAX_LINE_LENGTH) argsLine = prefix + wrap("(\n", indent(join3(args, "\n")), "\n)");
+      return join3([
         argsLine,
-        join2(directives, " "),
+        join3(directives, " "),
         selectionSet
       ], " ");
     },
@@ -803,20 +803,20 @@ var require_printer = /* @__PURE__ */ __commonJSMin(((exports) => {
     },
     FragmentSpread: function FragmentSpread(_ref5) {
       var name = _ref5.name, directives = _ref5.directives;
-      return "..." + name + wrap(" ", join2(directives, " "));
+      return "..." + name + wrap(" ", join3(directives, " "));
     },
     InlineFragment: function InlineFragment(_ref6) {
       var typeCondition = _ref6.typeCondition, directives = _ref6.directives, selectionSet = _ref6.selectionSet;
-      return join2([
+      return join3([
         "...",
         wrap("on ", typeCondition),
-        join2(directives, " "),
+        join3(directives, " "),
         selectionSet
       ], " ");
     },
     FragmentDefinition: function FragmentDefinition(_ref7) {
       var name = _ref7.name, typeCondition = _ref7.typeCondition, variableDefinitions = _ref7.variableDefinitions, directives = _ref7.directives, selectionSet = _ref7.selectionSet;
-      return "fragment ".concat(name).concat(wrap("(", join2(variableDefinitions, ", "), ")"), " ") + "on ".concat(typeCondition, " ").concat(wrap("", join2(directives, " "), " ")) + selectionSet;
+      return "fragment ".concat(name).concat(wrap("(", join3(variableDefinitions, ", "), ")"), " ") + "on ".concat(typeCondition, " ").concat(wrap("", join3(directives, " "), " ")) + selectionSet;
     },
     IntValue: function IntValue(_ref8) {
       return _ref8.value;
@@ -839,11 +839,11 @@ var require_printer = /* @__PURE__ */ __commonJSMin(((exports) => {
     },
     ListValue: function ListValue(_ref13) {
       var values = _ref13.values;
-      return "[" + join2(values, ", ") + "]";
+      return "[" + join3(values, ", ") + "]";
     },
     ObjectValue: function ObjectValue(_ref14) {
       var fields = _ref14.fields;
-      return "{" + join2(fields, ", ") + "}";
+      return "{" + join3(fields, ", ") + "}";
     },
     ObjectField: function ObjectField(_ref15) {
       var name = _ref15.name, value = _ref15.value;
@@ -851,7 +851,7 @@ var require_printer = /* @__PURE__ */ __commonJSMin(((exports) => {
     },
     Directive: function Directive(_ref16) {
       var name = _ref16.name, args = _ref16.arguments;
-      return "@" + name + wrap("(", join2(args, ", "), ")");
+      return "@" + name + wrap("(", join3(args, ", "), ")");
     },
     NamedType: function NamedType(_ref17) {
       return _ref17.name;
@@ -864,9 +864,9 @@ var require_printer = /* @__PURE__ */ __commonJSMin(((exports) => {
     },
     SchemaDefinition: addDescription(function(_ref20) {
       var directives = _ref20.directives, operationTypes = _ref20.operationTypes;
-      return join2([
+      return join3([
         "schema",
-        join2(directives, " "),
+        join3(directives, " "),
         block(operationTypes)
       ], " ");
     }),
@@ -876,149 +876,149 @@ var require_printer = /* @__PURE__ */ __commonJSMin(((exports) => {
     },
     ScalarTypeDefinition: addDescription(function(_ref22) {
       var name = _ref22.name, directives = _ref22.directives;
-      return join2([
+      return join3([
         "scalar",
         name,
-        join2(directives, " ")
+        join3(directives, " ")
       ], " ");
     }),
     ObjectTypeDefinition: addDescription(function(_ref23) {
       var name = _ref23.name, interfaces = _ref23.interfaces, directives = _ref23.directives, fields = _ref23.fields;
-      return join2([
+      return join3([
         "type",
         name,
-        wrap("implements ", join2(interfaces, " & ")),
-        join2(directives, " "),
+        wrap("implements ", join3(interfaces, " & ")),
+        join3(directives, " "),
         block(fields)
       ], " ");
     }),
     FieldDefinition: addDescription(function(_ref24) {
       var name = _ref24.name, args = _ref24.arguments, type = _ref24.type, directives = _ref24.directives;
-      return name + (hasMultilineItems(args) ? wrap("(\n", indent(join2(args, "\n")), "\n)") : wrap("(", join2(args, ", "), ")")) + ": " + type + wrap(" ", join2(directives, " "));
+      return name + (hasMultilineItems(args) ? wrap("(\n", indent(join3(args, "\n")), "\n)") : wrap("(", join3(args, ", "), ")")) + ": " + type + wrap(" ", join3(directives, " "));
     }),
     InputValueDefinition: addDescription(function(_ref25) {
       var name = _ref25.name, type = _ref25.type, defaultValue = _ref25.defaultValue, directives = _ref25.directives;
-      return join2([
+      return join3([
         name + ": " + type,
         wrap("= ", defaultValue),
-        join2(directives, " ")
+        join3(directives, " ")
       ], " ");
     }),
     InterfaceTypeDefinition: addDescription(function(_ref26) {
       var name = _ref26.name, interfaces = _ref26.interfaces, directives = _ref26.directives, fields = _ref26.fields;
-      return join2([
+      return join3([
         "interface",
         name,
-        wrap("implements ", join2(interfaces, " & ")),
-        join2(directives, " "),
+        wrap("implements ", join3(interfaces, " & ")),
+        join3(directives, " "),
         block(fields)
       ], " ");
     }),
     UnionTypeDefinition: addDescription(function(_ref27) {
       var name = _ref27.name, directives = _ref27.directives, types = _ref27.types;
-      return join2([
+      return join3([
         "union",
         name,
-        join2(directives, " "),
-        types && types.length !== 0 ? "= " + join2(types, " | ") : ""
+        join3(directives, " "),
+        types && types.length !== 0 ? "= " + join3(types, " | ") : ""
       ], " ");
     }),
     EnumTypeDefinition: addDescription(function(_ref28) {
       var name = _ref28.name, directives = _ref28.directives, values = _ref28.values;
-      return join2([
+      return join3([
         "enum",
         name,
-        join2(directives, " "),
+        join3(directives, " "),
         block(values)
       ], " ");
     }),
     EnumValueDefinition: addDescription(function(_ref29) {
       var name = _ref29.name, directives = _ref29.directives;
-      return join2([name, join2(directives, " ")], " ");
+      return join3([name, join3(directives, " ")], " ");
     }),
     InputObjectTypeDefinition: addDescription(function(_ref30) {
       var name = _ref30.name, directives = _ref30.directives, fields = _ref30.fields;
-      return join2([
+      return join3([
         "input",
         name,
-        join2(directives, " "),
+        join3(directives, " "),
         block(fields)
       ], " ");
     }),
     DirectiveDefinition: addDescription(function(_ref31) {
       var name = _ref31.name, args = _ref31.arguments, repeatable = _ref31.repeatable, locations = _ref31.locations;
-      return "directive @" + name + (hasMultilineItems(args) ? wrap("(\n", indent(join2(args, "\n")), "\n)") : wrap("(", join2(args, ", "), ")")) + (repeatable ? " repeatable" : "") + " on " + join2(locations, " | ");
+      return "directive @" + name + (hasMultilineItems(args) ? wrap("(\n", indent(join3(args, "\n")), "\n)") : wrap("(", join3(args, ", "), ")")) + (repeatable ? " repeatable" : "") + " on " + join3(locations, " | ");
     }),
     SchemaExtension: function SchemaExtension(_ref32) {
       var directives = _ref32.directives, operationTypes = _ref32.operationTypes;
-      return join2([
+      return join3([
         "extend schema",
-        join2(directives, " "),
+        join3(directives, " "),
         block(operationTypes)
       ], " ");
     },
     ScalarTypeExtension: function ScalarTypeExtension(_ref33) {
       var name = _ref33.name, directives = _ref33.directives;
-      return join2([
+      return join3([
         "extend scalar",
         name,
-        join2(directives, " ")
+        join3(directives, " ")
       ], " ");
     },
     ObjectTypeExtension: function ObjectTypeExtension(_ref34) {
       var name = _ref34.name, interfaces = _ref34.interfaces, directives = _ref34.directives, fields = _ref34.fields;
-      return join2([
+      return join3([
         "extend type",
         name,
-        wrap("implements ", join2(interfaces, " & ")),
-        join2(directives, " "),
+        wrap("implements ", join3(interfaces, " & ")),
+        join3(directives, " "),
         block(fields)
       ], " ");
     },
     InterfaceTypeExtension: function InterfaceTypeExtension(_ref35) {
       var name = _ref35.name, interfaces = _ref35.interfaces, directives = _ref35.directives, fields = _ref35.fields;
-      return join2([
+      return join3([
         "extend interface",
         name,
-        wrap("implements ", join2(interfaces, " & ")),
-        join2(directives, " "),
+        wrap("implements ", join3(interfaces, " & ")),
+        join3(directives, " "),
         block(fields)
       ], " ");
     },
     UnionTypeExtension: function UnionTypeExtension(_ref36) {
       var name = _ref36.name, directives = _ref36.directives, types = _ref36.types;
-      return join2([
+      return join3([
         "extend union",
         name,
-        join2(directives, " "),
-        types && types.length !== 0 ? "= " + join2(types, " | ") : ""
+        join3(directives, " "),
+        types && types.length !== 0 ? "= " + join3(types, " | ") : ""
       ], " ");
     },
     EnumTypeExtension: function EnumTypeExtension(_ref37) {
       var name = _ref37.name, directives = _ref37.directives, values = _ref37.values;
-      return join2([
+      return join3([
         "extend enum",
         name,
-        join2(directives, " "),
+        join3(directives, " "),
         block(values)
       ], " ");
     },
     InputObjectTypeExtension: function InputObjectTypeExtension(_ref38) {
       var name = _ref38.name, directives = _ref38.directives, fields = _ref38.fields;
-      return join2([
+      return join3([
         "extend input",
         name,
-        join2(directives, " "),
+        join3(directives, " "),
         block(fields)
       ], " ");
     }
   };
   function addDescription(cb) {
     return function(node) {
-      return join2([node.description, cb(node)], "\n");
+      return join3([node.description, cb(node)], "\n");
     };
   }
-  function join2(maybeArray) {
+  function join3(maybeArray) {
     var _maybeArray$filter$jo;
     var separator = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : "";
     return (_maybeArray$filter$jo = maybeArray === null || maybeArray === void 0 ? void 0 : maybeArray.filter(function(x) {
@@ -1026,7 +1026,7 @@ var require_printer = /* @__PURE__ */ __commonJSMin(((exports) => {
     }).join(separator)) !== null && _maybeArray$filter$jo !== void 0 ? _maybeArray$filter$jo : "";
   }
   function block(array) {
-    return wrap("{\n", indent(join2(array, "\n")), "\n}");
+    return wrap("{\n", indent(join3(array, "\n")), "\n}");
   }
   function wrap(start, maybeString) {
     var end = arguments.length > 2 && arguments[2] !== void 0 ? arguments[2] : "";
@@ -94595,11 +94595,135 @@ var LinearClient = class extends LinearSdk {
 };
 
 // src/linear.ts
-import { readFileSync, existsSync, writeFileSync, mkdirSync, renameSync, chmodSync } from "node:fs";
-import { join } from "node:path";
+import { readFileSync as readFileSync2, existsSync as existsSync2, writeFileSync, mkdirSync, renameSync, chmodSync } from "node:fs";
+import { join as join2 } from "node:path";
 import { homedir } from "node:os";
 import { createServer } from "node:http";
 import { createHash, randomBytes } from "node:crypto";
+
+// src/config.mjs
+import { execFileSync } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
+import { join, resolve } from "node:path";
+function findConfigPath(cwd = process.cwd()) {
+  const currentDir = resolve(cwd);
+  const localPath = join(currentDir, ".linear.toml");
+  if (existsSync(localPath)) return localPath;
+  try {
+    const root = execFileSync("git", ["rev-parse", "--show-toplevel"], {
+      cwd: currentDir,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"]
+    }).trim();
+    const rootPath = join(root, ".linear.toml");
+    if (root !== currentDir && existsSync(rootPath)) return rootPath;
+  } catch {
+  }
+  return void 0;
+}
+
+// src/current-issue.mjs
+import { execFileSync as execFileSync2 } from "node:child_process";
+var ISSUE_IDENTIFIER = /\b([a-zA-Z0-9]+)-([1-9][0-9]*)\b/;
+function getCurrentIssue(cwd = process.cwd()) {
+  let branch;
+  try {
+    branch = execFileSync2("git", ["branch", "--show-current"], {
+      cwd,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"]
+    }).trim();
+  } catch {
+    throw new Error("Cannot determine the current issue outside a Git worktree");
+  }
+  if (!branch) throw new Error("Cannot determine the current issue from a detached HEAD");
+  const match = branch.match(ISSUE_IDENTIFIER);
+  if (!match) throw new Error(`Current branch does not contain a Linear issue identifier: ${branch}`);
+  return {
+    identifier: `${match[1].toUpperCase()}-${match[2]}`,
+    branch,
+    source: "git-branch"
+  };
+}
+function resolveIssueReference(reference, cwd = process.cwd()) {
+  return reference.toLowerCase() === "current" ? getCurrentIssue(cwd).identifier : reference;
+}
+
+// src/upload-file.mjs
+import { readFile, stat } from "node:fs/promises";
+import { basename, extname } from "node:path";
+var MAX_UPLOAD_SIZE = 100 * 1024 * 1024;
+var MIME_TYPES = {
+  ".bmp": "image/bmp",
+  ".csv": "text/csv",
+  ".gif": "image/gif",
+  ".html": "text/html",
+  ".jpeg": "image/jpeg",
+  ".jpg": "image/jpeg",
+  ".json": "application/json",
+  ".md": "text/markdown",
+  ".mov": "video/quicktime",
+  ".mp4": "video/mp4",
+  ".pdf": "application/pdf",
+  ".png": "image/png",
+  ".svg": "image/svg+xml",
+  ".tar": "application/x-tar",
+  ".toml": "text/toml",
+  ".tsv": "text/tab-separated-values",
+  ".txt": "text/plain",
+  ".webm": "video/webm",
+  ".webp": "image/webp",
+  ".xml": "application/xml",
+  ".yaml": "application/yaml",
+  ".yml": "application/yaml",
+  ".zip": "application/zip"
+};
+var PUBLIC_IMAGE_TYPES = /* @__PURE__ */ new Set([
+  "image/bmp",
+  "image/gif",
+  "image/jpeg",
+  "image/png",
+  "image/webp"
+]);
+function getMimeType(path) {
+  return MIME_TYPES[extname(path).toLowerCase()] || "application/octet-stream";
+}
+async function uploadLocalFile(client, path, options = {}) {
+  const info = await stat(path).catch(() => void 0);
+  if (!info?.isFile()) throw new Error(`Not a file: ${path}`);
+  if (info.size > MAX_UPLOAD_SIZE) {
+    throw new Error(`File exceeds the 100 MB upload limit: ${path}`);
+  }
+  const filename = basename(path);
+  const contentType = getMimeType(path);
+  const makePublic = options.makePublic === true;
+  if (makePublic && !PUBLIC_IMAGE_TYPES.has(contentType)) {
+    throw new Error("Public uploads are limited to PNG, JPEG, GIF, WebP, and BMP images");
+  }
+  const payload = await client.fileUpload(contentType, filename, info.size, { makePublic });
+  if (!payload.success || !payload.uploadFile) throw new Error("Linear did not provide an upload URL");
+  const upload = payload.uploadFile;
+  const headers = { "content-type": contentType };
+  for (const header of upload.headers) headers[header.key] = header.value;
+  const response = await (options.fetch || fetch)(upload.uploadUrl, {
+    method: "PUT",
+    headers,
+    body: await readFile(path)
+  });
+  if (!response.ok) {
+    const detail = await response.text().catch(() => "");
+    throw new Error(`File upload failed: ${response.status} ${response.statusText}${detail ? ` - ${detail}` : ""}`);
+  }
+  return {
+    assetUrl: upload.assetUrl,
+    filename,
+    size: info.size,
+    contentType,
+    public: makePublic
+  };
+}
+
+// src/linear.ts
 function die(msg) {
   console.error(JSON.stringify({ error: msg }));
   process.exit(1);
@@ -94629,10 +94753,10 @@ async function safe(fn) {
 }
 var isUUID = (s) => /^[0-9a-f]{8}-/.test(s);
 function readStdin() {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve2, reject) => {
     const chunks = [];
     process.stdin.on("data", (c) => chunks.push(c));
-    process.stdin.on("end", () => resolve(Buffer.concat(chunks).toString()));
+    process.stdin.on("end", () => resolve2(Buffer.concat(chunks).toString()));
     process.stdin.on("error", reject);
   });
 }
@@ -94806,7 +94930,7 @@ function oInt(opts, key) {
   const v = o(opts, key);
   return v ? parseInt(v) : void 0;
 }
-var CREDENTIALS_PATH = join(homedir(), ".config", "linear", "credentials.toml");
+var CREDENTIALS_PATH = join2(homedir(), ".config", "linear", "credentials.toml");
 var DEFAULT_OAUTH_SCOPES = ["read", "write"];
 var PUBLIC_OAUTH_CLIENT_ID = "797741a4d504939df7d793838d4160d4";
 function normalizeIdentity(value) {
@@ -94850,9 +94974,9 @@ function tomlString(value) {
   return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n")}"`;
 }
 function writeProfile(identity, fields) {
-  const dir = join(homedir(), ".config", "linear");
+  const dir = join2(homedir(), ".config", "linear");
   mkdirSync(dir, { recursive: true, mode: 448 });
-  const content = existsSync(CREDENTIALS_PATH) ? readFileSync(CREDENTIALS_PATH, "utf-8") : 'version = "2"\n';
+  const content = existsSync2(CREDENTIALS_PATH) ? readFileSync2(CREDENTIALS_PATH, "utf-8") : 'version = "2"\n';
   const sectionName = profileSection(identity);
   const header = `[${sectionName}]`;
   const start = content.indexOf(header);
@@ -94872,8 +94996,8 @@ function writeProfile(identity, fields) {
   chmodSync(CREDENTIALS_PATH, 384);
 }
 function deleteProfile(identity) {
-  if (!existsSync(CREDENTIALS_PATH)) return;
-  const content = readFileSync(CREDENTIALS_PATH, "utf-8");
+  if (!existsSync2(CREDENTIALS_PATH)) return;
+  const content = readFileSync2(CREDENTIALS_PATH, "utf-8");
   const header = `[${profileSection(identity)}]`;
   const start = content.indexOf(header);
   if (start === -1) return;
@@ -94916,7 +95040,7 @@ function getGenericEnvAuth() {
 function getAuth(identity) {
   const genericEnvAuth = getGenericEnvAuth();
   if (genericEnvAuth) return genericEnvAuth;
-  const c = existsSync(CREDENTIALS_PATH) ? readFileSync(CREDENTIALS_PATH, "utf-8") : "";
+  const c = existsSync2(CREDENTIALS_PATH) ? readFileSync2(CREDENTIALS_PATH, "utf-8") : "";
   if (c) {
     const profile = readSection(c, profileSection(identity));
     if (profile.access_token) return { accessToken: profile.access_token };
@@ -94938,7 +95062,7 @@ function getAuth(identity) {
 async function getAuthWithRefresh(identity) {
   const genericEnvAuth = getGenericEnvAuth();
   if (genericEnvAuth) return genericEnvAuth;
-  const c = existsSync(CREDENTIALS_PATH) ? readFileSync(CREDENTIALS_PATH, "utf-8") : "";
+  const c = existsSync2(CREDENTIALS_PATH) ? readFileSync2(CREDENTIALS_PATH, "utf-8") : "";
   const profile = readSection(c, profileSection(identity));
   if (profile.access_token) {
     if (profile.token_expiry && new Date(profile.token_expiry).getTime() - Date.now() < 5 * 60 * 1e3) {
@@ -94969,9 +95093,9 @@ async function getAuthWithRefresh(identity) {
   return auth;
 }
 function getConfig() {
-  const p = join(process.cwd(), ".linear.toml");
-  if (!existsSync(p)) return { oauthClientIds: {} };
-  const c = readFileSync(p, "utf-8");
+  const p = findConfigPath();
+  if (!p) return { oauthClientIds: {} };
+  const c = readFileSync2(p, "utf-8");
   const oauth = readSection(c, "oauth");
   const oauthClientIds = {};
   for (const match of c.matchAll(/^\[oauth\.([a-z][a-z0-9_-]*)\]$/gm)) {
@@ -95042,6 +95166,7 @@ async function rUser(client, ref) {
   return users.nodes[0].id;
 }
 async function rIssue(client, ref) {
+  ref = resolveIssueReference(ref);
   const ck = `i:${ref}`;
   if (_c.has(ck)) return _c.get(ck);
   if (isUUID(ref)) {
@@ -95522,6 +95647,11 @@ cmd["issue.search"] = async (client, _pos, opts) => {
   if (!term) die("--query required");
   const r = await client.searchIssues(term, { ...pagVars(opts) });
   outList(await Promise.all(r.nodes.map((n) => fIssue(n))), r.pageInfo);
+};
+cmd["issue.current"] = async (_client, _pos, opts) => {
+  const current = getCurrentIssue();
+  if (oBool(opts, "plain")) console.log(current.identifier);
+  else out(current, true);
 };
 cmd["comment.list"] = async (client, _pos, opts) => {
   if (!o(opts, "issue")) die("--issue required");
@@ -96010,6 +96140,33 @@ cmd["attachment.create"] = async (client, _pos, opts) => {
   if (!p.success) die("Failed to create attachment");
   out({ success: true }, true);
 };
+cmd["attachment.upload"] = async (client, _pos, opts) => {
+  const issueRef = o(opts, "issue");
+  const file = o(opts, "file");
+  if (!issueRef || !file) die("--issue and --file required");
+  const upload = await uploadLocalFile(client, file, { makePublic: oBool(opts, "public") });
+  const input = {
+    issueId: await rIssue(client, issueRef),
+    url: upload.assetUrl,
+    title: o(opts, "title") || upload.filename
+  };
+  if (o(opts, "subtitle")) input.subtitle = o(opts, "subtitle");
+  const body = await oText(opts, "body");
+  if (body !== void 0) input.commentBody = body;
+  const p = await client.createAttachment(input);
+  if (!p.success) die("File uploaded, but creating the attachment failed");
+  const attachment = await p.attachment;
+  out({
+    success: true,
+    id: attachment?.id,
+    url: attachment?.url,
+    assetUrl: upload.assetUrl,
+    filename: upload.filename,
+    size: upload.size,
+    contentType: upload.contentType,
+    public: upload.public
+  }, true);
+};
 cmd["attachment.delete"] = async (client, pos) => {
   if (!pos[0]) die("Usage: linear attachment delete <id>");
   const p = await client.deleteAttachment(pos[0]);
@@ -96064,7 +96221,7 @@ Authenticating identity "${identity.name}" (${identity.source}).`);
   ${authorizeUrl.toString()}
 
 Waiting for callback on port ${port}...`);
-  const code = await new Promise((resolve, reject) => {
+  const code = await new Promise((resolve2, reject) => {
     const timeout = setTimeout(() => {
       srv.close();
       reject(new Error("Timed out waiting for authorization (5 min)"));
@@ -96107,7 +96264,7 @@ Waiting for callback on port ${port}...`);
       res.end("<h2>Authorization successful!</h2><p>You can close this tab.</p>");
       clearTimeout(timeout);
       srv.close();
-      resolve(authCode);
+      resolve2(authCode);
     });
     srv.once("error", reject);
     srv.listen(port, "localhost");
@@ -96157,7 +96314,7 @@ function authStatus(opts) {
     else out({ identity: identity.name, identitySource: identity.source, type: "api_key", source: "LINEAR_API_KEY" }, false);
     return;
   }
-  const c = existsSync(CREDENTIALS_PATH) ? readFileSync(CREDENTIALS_PATH, "utf-8") : "";
+  const c = existsSync2(CREDENTIALS_PATH) ? readFileSync2(CREDENTIALS_PATH, "utf-8") : "";
   const profile = readSection(c, profileSection(identity.name));
   if (profile.access_token) {
     const expiry = profile.token_expiry ? new Date(profile.token_expiry) : null;
@@ -96197,8 +96354,8 @@ function authStatus(opts) {
   }
 }
 function authList() {
-  if (!existsSync(CREDENTIALS_PATH)) return out([], false);
-  const content = readFileSync(CREDENTIALS_PATH, "utf-8");
+  if (!existsSync2(CREDENTIALS_PATH)) return out([], false);
+  const content = readFileSync2(CREDENTIALS_PATH, "utf-8");
   const identities = [...content.matchAll(/^\[identity\.([a-z][a-z0-9_-]*)\]$/gm)].map((match) => {
     const profile = readSection(content, profileSection(match[1]));
     return { identity: match[1], workspace: profile.workspace || null, organization: profile.organization || null, actor: profile.actor || "app" };
@@ -96207,8 +96364,8 @@ function authList() {
 }
 async function authLogout(opts) {
   const identity = resolveIdentity(opts);
-  if (!existsSync(CREDENTIALS_PATH)) die(`Identity "${identity.name}" is not authenticated.`);
-  const content = readFileSync(CREDENTIALS_PATH, "utf-8");
+  if (!existsSync2(CREDENTIALS_PATH)) die(`Identity "${identity.name}" is not authenticated.`);
+  const content = readFileSync2(CREDENTIALS_PATH, "utf-8");
   const profile = readSection(content, profileSection(identity.name));
   if (!profile.access_token && !profile.refresh_token) die(`No identity-specific credentials found for "${identity.name}".`);
   const token = profile.refresh_token || profile.access_token;
@@ -96230,6 +96387,12 @@ async function main() {
     if (action === "list") return authList();
     if (action === "logout") return authLogout(opts);
     die("Unknown auth action. Available: login, status, list, logout");
+  }
+  if (resource === "issue" && action === "current") {
+    const current = getCurrentIssue();
+    if (oBool(opts, "plain")) console.log(current.identifier);
+    else out(current, true);
+    return;
   }
   const identity = resolveIdentity(opts);
   const auth = await getAuthWithRefresh(identity.name);

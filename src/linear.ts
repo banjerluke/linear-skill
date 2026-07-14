@@ -7,6 +7,9 @@ import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { createServer } from 'node:http';
 import { createHash, randomBytes } from 'node:crypto';
+import { findConfigPath } from './config.mjs';
+import { getCurrentIssue, resolveIssueReference } from './current-issue.mjs';
+import { uploadLocalFile } from './upload-file.mjs';
 
 // ═══════════════════════════════ Helpers ═══════════════════════════════
 
@@ -452,8 +455,8 @@ async function getAuthWithRefresh(identity: string): Promise<Auth> {
 }
 
 function getConfig(): Config {
-  const p = join(process.cwd(), '.linear.toml');
-  if (!existsSync(p)) return { oauthClientIds: {} };
+  const p = findConfigPath();
+  if (!p) return { oauthClientIds: {} };
   const c = readFileSync(p, 'utf-8');
   const oauth = readSection(c, 'oauth');
   const oauthClientIds: Record<string, string> = {};
@@ -523,6 +526,7 @@ async function rUser(client: LinearClient, ref: string): Promise<string> {
 }
 
 async function rIssue(client: LinearClient, ref: string): Promise<string> {
+  ref = resolveIssueReference(ref);
   const ck = `i:${ref}`;
   if (_c.has(ck)) return _c.get(ck)!;
   if (isUUID(ref)) { _c.set(ck, ref); return ref; }
@@ -977,6 +981,12 @@ cmd['issue.search'] = async (client, _pos, opts) => {
   if (!term) die('--query required');
   const r = await client.searchIssues(term, { ...pagVars(opts) });
   outList(await Promise.all(r.nodes.map(n => fIssue(n as any))), (r as any).pageInfo);
+};
+
+cmd['issue.current'] = async (_client, _pos, opts) => {
+  const current = getCurrentIssue();
+  if (oBool(opts, 'plain')) console.log(current.identifier);
+  else out(current, true);
 };
 
 // ─── Comments ───
@@ -1532,6 +1542,36 @@ cmd['attachment.create'] = async (client, _pos, opts) => {
   out({ success: true }, true);
 };
 
+cmd['attachment.upload'] = async (client, _pos, opts) => {
+  const issueRef = o(opts, 'issue');
+  const file = o(opts, 'file');
+  if (!issueRef || !file) die('--issue and --file required');
+
+  const upload = await uploadLocalFile(client, file, { makePublic: oBool(opts, 'public') });
+  const input: any = {
+    issueId: await rIssue(client, issueRef),
+    url: upload.assetUrl,
+    title: o(opts, 'title') || upload.filename,
+  };
+  if (o(opts, 'subtitle')) input.subtitle = o(opts, 'subtitle');
+  const body = await oText(opts, 'body');
+  if (body !== undefined) input.commentBody = body;
+
+  const p = await client.createAttachment(input);
+  if (!p.success) die('File uploaded, but creating the attachment failed');
+  const attachment = await p.attachment;
+  out({
+    success: true,
+    id: attachment?.id,
+    url: attachment?.url,
+    assetUrl: upload.assetUrl,
+    filename: upload.filename,
+    size: upload.size,
+    contentType: upload.contentType,
+    public: upload.public,
+  }, true);
+};
+
 cmd['attachment.delete'] = async (client, pos) => {
   if (!pos[0]) die('Usage: linear attachment delete <id>');
   const p = await client.deleteAttachment(pos[0]);
@@ -1755,6 +1795,14 @@ async function main() {
     if (action === 'list') return authList();
     if (action === 'logout') return authLogout(opts);
     die('Unknown auth action. Available: login, status, list, logout');
+  }
+
+  // Resolving the current issue is a local Git operation and needs no Linear credentials.
+  if (resource === 'issue' && action === 'current') {
+    const current = getCurrentIssue();
+    if (oBool(opts, 'plain')) console.log(current.identifier);
+    else out(current, true);
+    return;
   }
 
   const identity = resolveIdentity(opts);
