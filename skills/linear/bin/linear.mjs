@@ -94932,7 +94932,16 @@ function oInt(opts, key) {
   return v ? parseInt(v) : void 0;
 }
 var CREDENTIALS_PATH = join2(homedir(), ".config", "linear", "credentials.toml");
-var DEFAULT_OAUTH_SCOPES = ["read", "write"];
+var DEFAULT_OAUTH_SCOPES = [
+  "read",
+  "write",
+  "app:assignable",
+  "app:mentionable",
+  "customer:read",
+  "customer:write",
+  "initiative:read",
+  "initiative:write"
+];
 var PUBLIC_OAUTH_CLIENT_ID = "797741a4d504939df7d793838d4160d4";
 function normalizeIdentity(value) {
   const identity = value.trim().toLowerCase();
@@ -96211,9 +96220,13 @@ Options:
   --force             With --all, reauthorize identities that are already configured
   --client-id <id>    Linear OAuth application client ID
   --use-generic-app   Explicitly authorize the bundled generic OAuth app
-  --scope <scope>     OAuth scope; repeat for multiple scopes (default: read, write)
+  --scope <scope>     Override OAuth scopes; repeat for multiple scopes
   --port <port>       Local callback port (default: 41549)
   --help              Show this help
+
+Default scopes:
+  read, write, app:assignable, app:mentionable, customer:read, customer:write,
+  initiative:read, initiative:write
 
 Agent workflow:
   1. Start this command in a long-lived interactive process.

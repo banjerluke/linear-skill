@@ -29,7 +29,9 @@ Create one Linear OAuth application for each identity that should appear separat
 5. Open each printed URL and authorize the app installation.
 6. Tokens are saved by identity in `~/.config/linear/credentials.toml` with automatic refresh.
 
-The client ID is public. PKCE protects the authorization-code exchange, so no client secret is supplied or stored. To make an app assignable or mentionable, add the corresponding scopes during login: `--scope read --scope write --scope app:assignable --scope app:mentionable`.
+The client ID is public. PKCE protects the authorization-code exchange, so no client secret is supplied or stored.
+
+By default, login requests the complete scope set used by a capable Linear agent: `read`, `write`, `app:assignable`, `app:mentionable`, `customer:read`, `customer:write`, `initiative:read`, and `initiative:write`. This prevents `prompt=consent` from unintentionally removing modern agent permissions from an existing installation. Passing one or more explicit `--scope` options replaces this default set and should be used only when a narrower installation is intentional.
 
 ## Login
 

@@ -54,7 +54,7 @@ During normal commands, the CLI detects Codex, Claude Code, or Cursor Agent from
 
 The same login command also works when the CLI is on a cloud or remote machine whose localhost callback cannot be reached by the user's browser. The CLI listens for a normal callback and simultaneously accepts a callback URL on stdin. Send the printed authorization URL to the user and ask them to authorize it. If the redirected localhost page fails to load, ask the user to copy the full URL from the browser address bar and paste it back, then write that URL to the waiting CLI process. The CLI validates the OAuth state and completes the PKCE token exchange on the remote machine. Do not ask the user for a Linear password, API key, or access token.
 
-The client ID is public. The CLI generates a fresh PKCE verifier for login and stores only the resulting access and refresh tokens. To make the identity assignable or mentionable, log in with `--scope read --scope write --scope app:assignable --scope app:mentionable`.
+The client ID is public. The CLI generates a fresh PKCE verifier for login and stores only the resulting access and refresh tokens. Login defaults to `read`, `write`, assignable, mentionable, customer read/write, and initiative read/write scopes so re-consent does not downgrade an existing agent installation. Explicit `--scope` options replace that default set.
 
 You can also authenticate with an environment variable:
 

@@ -235,6 +235,16 @@ test('PKCE login URL uses an app actor and no client secret', async t => {
   assert.equal(url.searchParams.get('redirect_uri'), `http://localhost:${port}/callback`);
   assert.equal(url.searchParams.get('actor'), 'app');
   assert.equal(url.searchParams.get('prompt'), 'consent');
+  assert.deepEqual(url.searchParams.get('scope').split(','), [
+    'read',
+    'write',
+    'app:assignable',
+    'app:mentionable',
+    'customer:read',
+    'customer:write',
+    'initiative:read',
+    'initiative:write',
+  ]);
   assert.equal(url.searchParams.get('code_challenge_method'), 'S256');
   assert.ok(url.searchParams.get('code_challenge'));
   assert.equal(url.searchParams.has('client_secret'), false);
