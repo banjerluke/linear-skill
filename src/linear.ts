@@ -81,11 +81,76 @@ function lineHash(line: string, idx: number): string {
 function formatHashlines(text: string): string {
   const lines = text.split('\n');
   const width = String(lines.length).length;
-  return lines.map((line, i) => {
-    const num = String(i + 1).padStart(width);
-    const hash = lineHash(line, i);
-    return `${num}#${hash}:${line}`;
-  }).join('\n');
+  return lines.map((line, i) => formatHashline(line, i, width)).join('\n');
+}
+
+function formatHashline(line: string, index: number, width: number): string {
+  const num = String(index + 1).padStart(width);
+  const hash = lineHash(line, index);
+  return `${num}#${hash}:${line}`;
+}
+
+function readHashlineRanges(text: string, opts: Opts): [number, number][] {
+  const lines = text.split('\n');
+  const selectors = ['section', 'lines', 'match'].filter(key => o(opts, key) !== undefined);
+  if (selectors.length > 1) die('Use only one of --section, --lines, or --match');
+  if (o(opts, 'context') !== undefined && !o(opts, 'match')) die('--context requires --match');
+  if (selectors.length === 0) return [[0, lines.length - 1]];
+
+  const lineRange = o(opts, 'lines');
+  if (lineRange !== undefined) {
+    const rangeMatch = lineRange.match(/^(\d+)(?::(\d+))?$/);
+    if (!rangeMatch) die('--lines must be a 1-based line or inclusive range such as "20:40"');
+    const start = parseInt(rangeMatch[1]);
+    const end = rangeMatch[2] ? parseInt(rangeMatch[2]) : start;
+    if (start < 1 || end < start || end > lines.length) die(`Invalid --lines range ${lineRange} (content has ${lines.length} lines)`);
+    return [[start - 1, end - 1]];
+  }
+
+  const section = o(opts, 'section');
+  if (section !== undefined) {
+    const target = section.trim().replace(/^#{1,6}\s+/, '').replace(/\s+#+\s*$/, '').toLowerCase();
+    const start = lines.findIndex(line => {
+      const match = line.match(/^(#{1,6})\s+(.+?)\s*$/);
+      return match && match[2].replace(/\s+#+\s*$/, '').trim().toLowerCase() === target;
+    });
+    if (start === -1) die(`Section not found: ${JSON.stringify(section)}`);
+    const level = lines[start].match(/^(#{1,6})\s+/)![1].length;
+    let end = lines.length - 1;
+    for (let i = start + 1; i < lines.length; i++) {
+      const match = lines[i].match(/^(#{1,6})\s+/);
+      if (match && match[1].length <= level) {
+        end = i - 1;
+        break;
+      }
+    }
+    return [[start, end]];
+  }
+
+  const needle = o(opts, 'match')!.toLowerCase();
+  if (!needle) die('--match requires non-empty text');
+  const contextValue = o(opts, 'context');
+  const context = contextValue === undefined ? 2 : parseInt(contextValue);
+  if (!Number.isInteger(context) || context < 0) die('--context must be a non-negative integer');
+  const ranges: [number, number][] = [];
+  for (let i = 0; i < lines.length; i++) {
+    if (!lines[i].toLowerCase().includes(needle)) continue;
+    const next: [number, number] = [Math.max(0, i - context), Math.min(lines.length - 1, i + context)];
+    const previous = ranges[ranges.length - 1];
+    if (previous && next[0] <= previous[1] + 1) previous[1] = Math.max(previous[1], next[1]);
+    else ranges.push(next);
+  }
+  if (ranges.length === 0) die(`No lines matched: ${JSON.stringify(o(opts, 'match'))}`);
+  return ranges;
+}
+
+function formatSelectedHashlines(text: string, opts: Opts): string {
+  const lines = text.split('\n');
+  const width = String(lines.length).length;
+  return readHashlineRanges(text, opts)
+    .map(([start, end]) => lines.slice(start, end + 1)
+      .map((line, offset) => formatHashline(line, start + offset, width)).join('\n'))
+    .join('\n...\n');
 }
 
 type EditOp = {
@@ -692,7 +757,7 @@ cmd['issue.get'] = async (client, pos, opts) => {
 };
 
 cmd['issue.read'] = async (client, pos, opts) => {
-  if (!pos[0]) die('Usage: linear issue read <identifier> [--no-comments]');
+  if (!pos[0]) die('Usage: linear issue read <identifier> [--no-comments] [--section "Heading" | --lines 20:40 | --match "text" [--context 3]]');
   const id = await rIssue(client, pos[0]);
   const issue = await client.issue(id);
   const fm = issueFrontmatter(issue, await resolveIssueMeta(issue));
@@ -703,14 +768,14 @@ cmd['issue.read'] = async (client, pos, opts) => {
     lines.push(`${k}: ${yamlVal(v)}`);
   }
   lines.push('---', '');
-  if (issue.description) lines.push(formatHashlines(issue.description));
+  if (issue.description) lines.push(formatSelectedHashlines(issue.description, opts));
   else lines.push('(empty description)');
   if (comments) lines.push('', comments);
   console.log(lines.join('\n'));
 };
 
 cmd['issue.edit'] = async (client, pos, opts) => {
-  if (!pos[0]) die('Usage: echo "replace 6#JB:new text" | linear issue edit <identifier>');
+  if (!pos[0]) die('Usage: echo "replace 6#JB:new text" | linear issue edit <identifier> [--print]');
   const editsText = await readStdin();
   if (!editsText.trim()) die('No edit commands on stdin');
   const edits = parseEdits(editsText);
@@ -723,7 +788,8 @@ cmd['issue.edit'] = async (client, pos, opts) => {
   const p = await client.updateIssue(id, { description: newDescription });
   if (!p.success) die('Failed to update issue');
 
-  console.log(formatHashlines(newDescription));
+  if (oBool(opts, 'print')) console.log(formatHashlines(newDescription));
+  else out({ success: true, identifier: issue.identifier }, true);
 };
 
 cmd['issue.create'] = async (client, _pos, opts, config) => {
@@ -999,8 +1065,8 @@ cmd['document.update'] = async (client, pos, opts) => {
   out({ success: true }, true);
 };
 
-cmd['document.read'] = async (client, pos, _opts) => {
-  if (!pos[0]) die('Usage: linear document read <id>');
+cmd['document.read'] = async (client, pos, opts) => {
+  if (!pos[0]) die('Usage: linear document read <id> [--section "Heading" | --lines 20:40 | --match "text" [--context 3]]');
   const doc = await client.document(pos[0]);
   const [project, creator] = await Promise.all([safe(() => doc.project), safe(() => doc.creator)]);
   const fm = stripEmpty({
@@ -1015,13 +1081,13 @@ cmd['document.read'] = async (client, pos, _opts) => {
     lines.push(`${k}: ${yamlVal(v)}`);
   }
   lines.push('---', '');
-  if (doc.content) lines.push(formatHashlines(doc.content));
+  if (doc.content) lines.push(formatSelectedHashlines(doc.content, opts));
   else lines.push('(empty content)');
   console.log(lines.join('\n'));
 };
 
 cmd['document.edit'] = async (client, pos, opts) => {
-  if (!pos[0]) die('Usage: echo "replace 3#VR:new text" | linear document edit <id>');
+  if (!pos[0]) die('Usage: echo "replace 3#VR:new text" | linear document edit <id> [--print]');
   const editsText = await readStdin();
   if (!editsText.trim()) die('No edit commands on stdin');
   const edits = parseEdits(editsText);
@@ -1033,7 +1099,8 @@ cmd['document.edit'] = async (client, pos, opts) => {
   const p = await client.updateDocument(pos[0], { content: newContent });
   if (!p.success) die('Failed to update document');
 
-  console.log(formatHashlines(newContent));
+  if (oBool(opts, 'print')) console.log(formatHashlines(newContent));
+  else out({ success: true, id: doc.id }, true);
 };
 
 // ─── Initiatives ───

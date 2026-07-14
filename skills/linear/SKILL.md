@@ -127,8 +127,8 @@ Use `read` + `edit` for precise, line-level edits to issue descriptions and docu
 **Read** returns content with hashline anchors (`LINE#HASH:content`):
 
 ```
-lt issue read SM-123 [--no-comments]
-lt document read <id>
+lt issue read SM-123 [--no-comments] [--section "Heading" | --lines 20:40 | --match "text" [--context 3]]
+lt document read <id> [--section "Heading" | --lines 20:40 | --match "text" [--context 3]]
 ```
 
 Example output:
@@ -161,6 +161,20 @@ replace 3#VR:Updated line
 EDITS
 ```
 
+Target large descriptions and documents instead of returning the full body:
+
+```bash
+lt issue read SM-123 --section "Implementation Plan" --no-comments
+lt issue read SM-123 --lines 530:590 --no-comments
+lt issue read SM-123 --match "promotion gate" --context 4 --no-comments
+```
+
+- `--section` matches a Markdown heading case-insensitively and returns that section through the next heading of the same or higher level.
+- `--lines` accepts a 1-based line or inclusive range.
+- `--match` performs a case-insensitive literal match and returns every match with two context lines by default.
+- Targeted reads preserve the original line numbers and hashes, so their anchors work with `edit`.
+- Use only one selector per read. `--context` is valid only with `--match`.
+
 Edit commands (one per line, lowercase):
 
 - `replace ANCHOR:content` — replace the anchored line (use heredoc for multi-line)
@@ -188,7 +202,7 @@ See docs for details.
 EDITS
 ```
 
-On success, outputs refreshed hashline-anchored content for continued editing. On hash mismatch (content changed since read), fails with an error showing the current line content.
+On success, `edit` outputs compact JSON. Pass `--print` to output the full refreshed hashline-anchored body when it is genuinely needed. When continuing after a compact edit, prefer another targeted `read`. On hash mismatch (content changed since read), `edit` fails with an error showing the current line content.
 
 ### Comments
 
@@ -229,7 +243,7 @@ lt document list [--project "Name"] [--query "text"] [--initiative "Init"]
 lt document get <id> [--json]
 lt document create --title "Title" [--project "Name"] [--content "Markdown..."] [--icon "emoji"]
 lt document update <id> [--title "New"] [--content "Updated..."]
-lt document read <id>
+lt document read <id> [--section "Heading" | --lines 20:40 | --match "text" [--context 3]]
 echo "replace 3#VR:new text" | lt document edit <id>
 ```
 
