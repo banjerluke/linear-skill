@@ -22,7 +22,7 @@ This skill can be installed in different locations. Before executing any command
 
 `lt` is used throughout this doc as shorthand for the full invocation path.
 
-**Config:** Reads `.linear.toml` from CWD for defaults (`team_id`, `workspace`). Auth from `~/.config/linear/credentials.toml`.
+**Config:** Reads `.linear.toml` from CWD or the Git repository root for defaults (`team_id`, `workspace`). Auth from `~/.config/linear/credentials.toml`.
 
 ## Authentication
 

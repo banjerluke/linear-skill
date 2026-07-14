@@ -2,10 +2,10 @@
 import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 
-// node_modules/@linear/sdk/dist/chunk-DPPnyiuk.mjs
+// ../../../Users/luke/Code/skills/linear-agent-skill/node_modules/@linear/sdk/dist/chunk-DPPnyiuk.mjs
 var __commonJSMin = (cb, mod) => () => (mod || cb((mod = { exports: {} }).exports, mod), mod.exports);
 
-// node_modules/@linear/sdk/dist/index.mjs
+// ../../../Users/luke/Code/skills/linear-agent-skill/node_modules/@linear/sdk/dist/index.mjs
 var LinearErrorType = /* @__PURE__ */ (function(LinearErrorType$1) {
   LinearErrorType$1["FeatureNotAccessible"] = "FeatureNotAccessible";
   LinearErrorType$1["InvalidInput"] = "InvalidInput";
@@ -763,24 +763,24 @@ var require_printer = /* @__PURE__ */ __commonJSMin(((exports) => {
       return "$" + node.name;
     },
     Document: function Document$1(node) {
-      return join2(node.definitions, "\n\n") + "\n";
+      return join3(node.definitions, "\n\n") + "\n";
     },
     OperationDefinition: function OperationDefinition(node) {
       var op = node.operation;
       var name = node.name;
-      var varDefs = wrap("(", join2(node.variableDefinitions, ", "), ")");
-      var directives = join2(node.directives, " ");
+      var varDefs = wrap("(", join3(node.variableDefinitions, ", "), ")");
+      var directives = join3(node.directives, " ");
       var selectionSet = node.selectionSet;
-      return !name && !directives && !varDefs && op === "query" ? selectionSet : join2([
+      return !name && !directives && !varDefs && op === "query" ? selectionSet : join3([
         op,
-        join2([name, varDefs]),
+        join3([name, varDefs]),
         directives,
         selectionSet
       ], " ");
     },
     VariableDefinition: function VariableDefinition(_ref) {
       var variable = _ref.variable, type = _ref.type, defaultValue = _ref.defaultValue, directives = _ref.directives;
-      return variable + ": " + type + wrap(" = ", defaultValue) + wrap(" ", join2(directives, " "));
+      return variable + ": " + type + wrap(" = ", defaultValue) + wrap(" ", join3(directives, " "));
     },
     SelectionSet: function SelectionSet(_ref2) {
       var selections = _ref2.selections;
@@ -789,11 +789,11 @@ var require_printer = /* @__PURE__ */ __commonJSMin(((exports) => {
     Field: function Field(_ref3) {
       var alias = _ref3.alias, name = _ref3.name, args = _ref3.arguments, directives = _ref3.directives, selectionSet = _ref3.selectionSet;
       var prefix = wrap("", alias, ": ") + name;
-      var argsLine = prefix + wrap("(", join2(args, ", "), ")");
-      if (argsLine.length > MAX_LINE_LENGTH) argsLine = prefix + wrap("(\n", indent(join2(args, "\n")), "\n)");
-      return join2([
+      var argsLine = prefix + wrap("(", join3(args, ", "), ")");
+      if (argsLine.length > MAX_LINE_LENGTH) argsLine = prefix + wrap("(\n", indent(join3(args, "\n")), "\n)");
+      return join3([
         argsLine,
-        join2(directives, " "),
+        join3(directives, " "),
         selectionSet
       ], " ");
     },
@@ -803,20 +803,20 @@ var require_printer = /* @__PURE__ */ __commonJSMin(((exports) => {
     },
     FragmentSpread: function FragmentSpread(_ref5) {
       var name = _ref5.name, directives = _ref5.directives;
-      return "..." + name + wrap(" ", join2(directives, " "));
+      return "..." + name + wrap(" ", join3(directives, " "));
     },
     InlineFragment: function InlineFragment(_ref6) {
       var typeCondition = _ref6.typeCondition, directives = _ref6.directives, selectionSet = _ref6.selectionSet;
-      return join2([
+      return join3([
         "...",
         wrap("on ", typeCondition),
-        join2(directives, " "),
+        join3(directives, " "),
         selectionSet
       ], " ");
     },
     FragmentDefinition: function FragmentDefinition(_ref7) {
       var name = _ref7.name, typeCondition = _ref7.typeCondition, variableDefinitions = _ref7.variableDefinitions, directives = _ref7.directives, selectionSet = _ref7.selectionSet;
-      return "fragment ".concat(name).concat(wrap("(", join2(variableDefinitions, ", "), ")"), " ") + "on ".concat(typeCondition, " ").concat(wrap("", join2(directives, " "), " ")) + selectionSet;
+      return "fragment ".concat(name).concat(wrap("(", join3(variableDefinitions, ", "), ")"), " ") + "on ".concat(typeCondition, " ").concat(wrap("", join3(directives, " "), " ")) + selectionSet;
     },
     IntValue: function IntValue(_ref8) {
       return _ref8.value;
@@ -839,11 +839,11 @@ var require_printer = /* @__PURE__ */ __commonJSMin(((exports) => {
     },
     ListValue: function ListValue(_ref13) {
       var values = _ref13.values;
-      return "[" + join2(values, ", ") + "]";
+      return "[" + join3(values, ", ") + "]";
     },
     ObjectValue: function ObjectValue(_ref14) {
       var fields = _ref14.fields;
-      return "{" + join2(fields, ", ") + "}";
+      return "{" + join3(fields, ", ") + "}";
     },
     ObjectField: function ObjectField(_ref15) {
       var name = _ref15.name, value = _ref15.value;
@@ -851,7 +851,7 @@ var require_printer = /* @__PURE__ */ __commonJSMin(((exports) => {
     },
     Directive: function Directive(_ref16) {
       var name = _ref16.name, args = _ref16.arguments;
-      return "@" + name + wrap("(", join2(args, ", "), ")");
+      return "@" + name + wrap("(", join3(args, ", "), ")");
     },
     NamedType: function NamedType(_ref17) {
       return _ref17.name;
@@ -864,9 +864,9 @@ var require_printer = /* @__PURE__ */ __commonJSMin(((exports) => {
     },
     SchemaDefinition: addDescription(function(_ref20) {
       var directives = _ref20.directives, operationTypes = _ref20.operationTypes;
-      return join2([
+      return join3([
         "schema",
-        join2(directives, " "),
+        join3(directives, " "),
         block(operationTypes)
       ], " ");
     }),
@@ -876,149 +876,149 @@ var require_printer = /* @__PURE__ */ __commonJSMin(((exports) => {
     },
     ScalarTypeDefinition: addDescription(function(_ref22) {
       var name = _ref22.name, directives = _ref22.directives;
-      return join2([
+      return join3([
         "scalar",
         name,
-        join2(directives, " ")
+        join3(directives, " ")
       ], " ");
     }),
     ObjectTypeDefinition: addDescription(function(_ref23) {
       var name = _ref23.name, interfaces = _ref23.interfaces, directives = _ref23.directives, fields = _ref23.fields;
-      return join2([
+      return join3([
         "type",
         name,
-        wrap("implements ", join2(interfaces, " & ")),
-        join2(directives, " "),
+        wrap("implements ", join3(interfaces, " & ")),
+        join3(directives, " "),
         block(fields)
       ], " ");
     }),
     FieldDefinition: addDescription(function(_ref24) {
       var name = _ref24.name, args = _ref24.arguments, type = _ref24.type, directives = _ref24.directives;
-      return name + (hasMultilineItems(args) ? wrap("(\n", indent(join2(args, "\n")), "\n)") : wrap("(", join2(args, ", "), ")")) + ": " + type + wrap(" ", join2(directives, " "));
+      return name + (hasMultilineItems(args) ? wrap("(\n", indent(join3(args, "\n")), "\n)") : wrap("(", join3(args, ", "), ")")) + ": " + type + wrap(" ", join3(directives, " "));
     }),
     InputValueDefinition: addDescription(function(_ref25) {
       var name = _ref25.name, type = _ref25.type, defaultValue = _ref25.defaultValue, directives = _ref25.directives;
-      return join2([
+      return join3([
         name + ": " + type,
         wrap("= ", defaultValue),
-        join2(directives, " ")
+        join3(directives, " ")
       ], " ");
     }),
     InterfaceTypeDefinition: addDescription(function(_ref26) {
       var name = _ref26.name, interfaces = _ref26.interfaces, directives = _ref26.directives, fields = _ref26.fields;
-      return join2([
+      return join3([
         "interface",
         name,
-        wrap("implements ", join2(interfaces, " & ")),
-        join2(directives, " "),
+        wrap("implements ", join3(interfaces, " & ")),
+        join3(directives, " "),
         block(fields)
       ], " ");
     }),
     UnionTypeDefinition: addDescription(function(_ref27) {
       var name = _ref27.name, directives = _ref27.directives, types = _ref27.types;
-      return join2([
+      return join3([
         "union",
         name,
-        join2(directives, " "),
-        types && types.length !== 0 ? "= " + join2(types, " | ") : ""
+        join3(directives, " "),
+        types && types.length !== 0 ? "= " + join3(types, " | ") : ""
       ], " ");
     }),
     EnumTypeDefinition: addDescription(function(_ref28) {
       var name = _ref28.name, directives = _ref28.directives, values = _ref28.values;
-      return join2([
+      return join3([
         "enum",
         name,
-        join2(directives, " "),
+        join3(directives, " "),
         block(values)
       ], " ");
     }),
     EnumValueDefinition: addDescription(function(_ref29) {
       var name = _ref29.name, directives = _ref29.directives;
-      return join2([name, join2(directives, " ")], " ");
+      return join3([name, join3(directives, " ")], " ");
     }),
     InputObjectTypeDefinition: addDescription(function(_ref30) {
       var name = _ref30.name, directives = _ref30.directives, fields = _ref30.fields;
-      return join2([
+      return join3([
         "input",
         name,
-        join2(directives, " "),
+        join3(directives, " "),
         block(fields)
       ], " ");
     }),
     DirectiveDefinition: addDescription(function(_ref31) {
       var name = _ref31.name, args = _ref31.arguments, repeatable = _ref31.repeatable, locations = _ref31.locations;
-      return "directive @" + name + (hasMultilineItems(args) ? wrap("(\n", indent(join2(args, "\n")), "\n)") : wrap("(", join2(args, ", "), ")")) + (repeatable ? " repeatable" : "") + " on " + join2(locations, " | ");
+      return "directive @" + name + (hasMultilineItems(args) ? wrap("(\n", indent(join3(args, "\n")), "\n)") : wrap("(", join3(args, ", "), ")")) + (repeatable ? " repeatable" : "") + " on " + join3(locations, " | ");
     }),
     SchemaExtension: function SchemaExtension(_ref32) {
       var directives = _ref32.directives, operationTypes = _ref32.operationTypes;
-      return join2([
+      return join3([
         "extend schema",
-        join2(directives, " "),
+        join3(directives, " "),
         block(operationTypes)
       ], " ");
     },
     ScalarTypeExtension: function ScalarTypeExtension(_ref33) {
       var name = _ref33.name, directives = _ref33.directives;
-      return join2([
+      return join3([
         "extend scalar",
         name,
-        join2(directives, " ")
+        join3(directives, " ")
       ], " ");
     },
     ObjectTypeExtension: function ObjectTypeExtension(_ref34) {
       var name = _ref34.name, interfaces = _ref34.interfaces, directives = _ref34.directives, fields = _ref34.fields;
-      return join2([
+      return join3([
         "extend type",
         name,
-        wrap("implements ", join2(interfaces, " & ")),
-        join2(directives, " "),
+        wrap("implements ", join3(interfaces, " & ")),
+        join3(directives, " "),
         block(fields)
       ], " ");
     },
     InterfaceTypeExtension: function InterfaceTypeExtension(_ref35) {
       var name = _ref35.name, interfaces = _ref35.interfaces, directives = _ref35.directives, fields = _ref35.fields;
-      return join2([
+      return join3([
         "extend interface",
         name,
-        wrap("implements ", join2(interfaces, " & ")),
-        join2(directives, " "),
+        wrap("implements ", join3(interfaces, " & ")),
+        join3(directives, " "),
         block(fields)
       ], " ");
     },
     UnionTypeExtension: function UnionTypeExtension(_ref36) {
       var name = _ref36.name, directives = _ref36.directives, types = _ref36.types;
-      return join2([
+      return join3([
         "extend union",
         name,
-        join2(directives, " "),
-        types && types.length !== 0 ? "= " + join2(types, " | ") : ""
+        join3(directives, " "),
+        types && types.length !== 0 ? "= " + join3(types, " | ") : ""
       ], " ");
     },
     EnumTypeExtension: function EnumTypeExtension(_ref37) {
       var name = _ref37.name, directives = _ref37.directives, values = _ref37.values;
-      return join2([
+      return join3([
         "extend enum",
         name,
-        join2(directives, " "),
+        join3(directives, " "),
         block(values)
       ], " ");
     },
     InputObjectTypeExtension: function InputObjectTypeExtension(_ref38) {
       var name = _ref38.name, directives = _ref38.directives, fields = _ref38.fields;
-      return join2([
+      return join3([
         "extend input",
         name,
-        join2(directives, " "),
+        join3(directives, " "),
         block(fields)
       ], " ");
     }
   };
   function addDescription(cb) {
     return function(node) {
-      return join2([node.description, cb(node)], "\n");
+      return join3([node.description, cb(node)], "\n");
     };
   }
-  function join2(maybeArray) {
+  function join3(maybeArray) {
     var _maybeArray$filter$jo;
     var separator = arguments.length > 1 && arguments[1] !== void 0 ? arguments[1] : "";
     return (_maybeArray$filter$jo = maybeArray === null || maybeArray === void 0 ? void 0 : maybeArray.filter(function(x) {
@@ -1026,7 +1026,7 @@ var require_printer = /* @__PURE__ */ __commonJSMin(((exports) => {
     }).join(separator)) !== null && _maybeArray$filter$jo !== void 0 ? _maybeArray$filter$jo : "";
   }
   function block(array) {
-    return wrap("{\n", indent(join2(array, "\n")), "\n}");
+    return wrap("{\n", indent(join3(array, "\n")), "\n}");
   }
   function wrap(start, maybeString) {
     var end = arguments.length > 2 && arguments[2] !== void 0 ? arguments[2] : "";
@@ -94595,11 +94595,43 @@ var LinearClient = class extends LinearSdk {
 };
 
 // src/linear.ts
-import { readFileSync, existsSync, writeFileSync, mkdirSync } from "node:fs";
-import { join } from "node:path";
+import { readFileSync as readFileSync2, existsSync as existsSync2, writeFileSync, mkdirSync } from "node:fs";
+import { join as join2 } from "node:path";
 import { homedir } from "node:os";
 import { createServer } from "node:http";
 import { randomBytes } from "node:crypto";
+
+// src/config.mjs
+import { execFileSync } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
+import { join, resolve } from "node:path";
+function findConfigPath(cwd = process.cwd()) {
+  const currentDir = resolve(cwd);
+  const localPath = join(currentDir, ".linear.toml");
+  if (existsSync(localPath)) return localPath;
+  try {
+    const root = execFileSync("git", ["rev-parse", "--show-toplevel"], {
+      cwd: currentDir,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"]
+    }).trim();
+    const rootPath = join(root, ".linear.toml");
+    if (root !== currentDir && existsSync(rootPath)) return rootPath;
+  } catch {
+  }
+  return void 0;
+}
+function readProjectConfig(cwd = process.cwd()) {
+  const path = findConfigPath(cwd);
+  if (!path) return {};
+  const content = readFileSync(path, "utf8");
+  return {
+    team: content.match(/^team_id\s*=\s*"(.+?)"/m)?.[1],
+    workspace: content.match(/^workspace\s*=\s*"(.+?)"/m)?.[1]
+  };
+}
+
+// src/linear.ts
 function die(msg) {
   console.error(JSON.stringify({ error: msg }));
   process.exit(1);
@@ -94629,10 +94661,10 @@ async function safe(fn) {
 }
 var isUUID = (s) => /^[0-9a-f]{8}-/.test(s);
 function readStdin() {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve2, reject) => {
     const chunks = [];
     process.stdin.on("data", (c) => chunks.push(c));
-    process.stdin.on("end", () => resolve(Buffer.concat(chunks).toString()));
+    process.stdin.on("end", () => resolve2(Buffer.concat(chunks).toString()));
     process.stdin.on("error", reject);
   });
 }
@@ -94806,7 +94838,7 @@ function oInt(opts, key) {
   const v = o(opts, key);
   return v ? parseInt(v) : void 0;
 }
-var CREDENTIALS_PATH = join(homedir(), ".config", "linear", "credentials.toml");
+var CREDENTIALS_PATH = join2(homedir(), ".config", "linear", "credentials.toml");
 function readSection(content, name) {
   const start = content.indexOf(`[${name}]`);
   if (start === -1) return {};
@@ -94819,7 +94851,7 @@ function readSection(content, name) {
   return kv;
 }
 function writeCredentials(workspace, fields) {
-  const dir = join(homedir(), ".config", "linear");
+  const dir = join2(homedir(), ".config", "linear");
   mkdirSync(dir, { recursive: true });
   const lines = [`default = "${workspace}"`, "", `[${workspace}]`];
   for (const [k, v] of Object.entries(fields)) lines.push(`${k} = "${v}"`);
@@ -94848,8 +94880,8 @@ function getEnvAuth() {
 function getAuth() {
   const envAuth = getEnvAuth();
   if (envAuth) return envAuth;
-  if (!existsSync(CREDENTIALS_PATH)) die("Not authenticated. Run `linear auth login --client-id <id> --client-secret <secret>` or set LINEAR_API_KEY / LINEAR_ACCESS_TOKEN.");
-  const c = readFileSync(CREDENTIALS_PATH, "utf-8");
+  if (!existsSync2(CREDENTIALS_PATH)) die("Not authenticated. Run `linear auth login --client-id <id> --client-secret <secret>` or set LINEAR_API_KEY / LINEAR_ACCESS_TOKEN.");
+  const c = readFileSync2(CREDENTIALS_PATH, "utf-8");
   const ws = c.match(/^default\s*=\s*"(.+?)"/m)?.[1];
   if (!ws) die("Cannot parse default workspace from credentials.toml");
   const section = readSection(c, ws);
@@ -94866,7 +94898,7 @@ async function getAuthWithRefresh() {
   if (envAuth) return envAuth;
   const auth = getAuth();
   if ("apiKey" in auth) return auth;
-  const c = readFileSync(CREDENTIALS_PATH, "utf-8");
+  const c = readFileSync2(CREDENTIALS_PATH, "utf-8");
   const ws = c.match(/^default\s*=\s*"(.+?)"/m)?.[1];
   const section = readSection(c, ws);
   if (section.token_expiry) {
@@ -94882,13 +94914,7 @@ async function getAuthWithRefresh() {
   return auth;
 }
 function getConfig() {
-  const p = join(process.cwd(), ".linear.toml");
-  if (!existsSync(p)) return {};
-  const c = readFileSync(p, "utf-8");
-  return {
-    team: c.match(/^team_id\s*=\s*"(.+?)"/m)?.[1],
-    workspace: c.match(/^workspace\s*=\s*"(.+?)"/m)?.[1]
-  };
+  return readProjectConfig();
 }
 function parseArgs() {
   const [resource, action, ...rest] = process.argv.slice(2);
@@ -95954,7 +95980,7 @@ Open this URL in your browser to authorize:
   ${authorizeUrl}
 
 Waiting for callback on port ${port}...`);
-  const code = await new Promise((resolve, reject) => {
+  const code = await new Promise((resolve2, reject) => {
     const timeout = setTimeout(() => {
       srv.close();
       reject(new Error("Timed out waiting for authorization (5 min)"));
@@ -95997,7 +96023,7 @@ Waiting for callback on port ${port}...`);
       res.end("<h2>Authorization successful!</h2><p>You can close this tab.</p>");
       clearTimeout(timeout);
       srv.close();
-      resolve(authCode);
+      resolve2(authCode);
     });
     srv.listen(port);
   });
@@ -96037,8 +96063,8 @@ function authStatus() {
     else out({ type: "api_key", source: "LINEAR_API_KEY env var" }, false);
     return;
   }
-  if (!existsSync(CREDENTIALS_PATH)) die("Not authenticated. Run `linear auth login`.");
-  const c = readFileSync(CREDENTIALS_PATH, "utf-8");
+  if (!existsSync2(CREDENTIALS_PATH)) die("Not authenticated. Run `linear auth login`.");
+  const c = readFileSync2(CREDENTIALS_PATH, "utf-8");
   const ws = c.match(/^default\s*=\s*"(.+?)"/m)?.[1];
   if (!ws) die("Cannot parse credentials.toml");
   const section = readSection(c, ws);

@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { createServer } from 'node:http';
 import { randomBytes } from 'node:crypto';
+import { readProjectConfig } from './config.mjs';
 
 // ═══════════════════════════════ Helpers ═══════════════════════════════
 
@@ -345,13 +346,7 @@ async function getAuthWithRefresh(): Promise<Auth> {
 }
 
 function getConfig(): Config {
-  const p = join(process.cwd(), '.linear.toml');
-  if (!existsSync(p)) return {};
-  const c = readFileSync(p, 'utf-8');
-  return {
-    team: c.match(/^team_id\s*=\s*"(.+?)"/m)?.[1],
-    workspace: c.match(/^workspace\s*=\s*"(.+?)"/m)?.[1],
-  };
+  return readProjectConfig();
 }
 
 // ═══════════════════════════════ CLI Parser ═══════════════════════════════
