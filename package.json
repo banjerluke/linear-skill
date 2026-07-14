@@ -10,7 +10,8 @@
     "test": "npm run build && node --test test/*.test.mjs"
   },
   "dependencies": {
-    "@linear/sdk": "^88.1.0"
+    "@linear/sdk": "^88.1.0",
+    "smol-toml": "^1.7.0"
   },
   "devDependencies": {
     "esbuild": "^0.28.1"

@@ -25,7 +25,7 @@ Use client credentials when the same app identity must work on multiple computer
 
 1. Enable the client credentials grant in the private Linear OAuth application.
 2. Keep its public client ID in `.linear.toml` under `[oauth.<identity>]`, or set `<IDENTITY>_LINEAR_OAUTH_CLIENT_ID`.
-3. Put the client secret in the machine's environment or secret manager as `<IDENTITY>_LINEAR_OAUTH_CLIENT_SECRET`.
+3. Provide the client secret as `<IDENTITY>_LINEAR_OAUTH_CLIENT_SECRET`, or configure an identity-specific `client_secret_command` that retrieves it from a secret manager.
 4. Run any normal `lt` command. Do not run `auth login`.
 
 For example:
@@ -35,7 +35,18 @@ export CLAUDE_LINEAR_OAUTH_CLIENT_SECRET="<secret>"
 lt issue list --team ENG
 ```
 
-On the first command, the CLI requests an app-actor token with the canonical agent scopes, stores only the token and its expiry in `~/.config/linear/credentials.toml`, and continues the command. The client secret is never written to disk or printed. Subsequent commands reuse the cached token. Within five minutes of expiry, the CLI automatically obtains and stores a replacement token using the environment secret.
+With Bitwarden Secrets Manager:
+
+```toml
+[oauth.claude]
+client_id = "<claude-client-id>"
+client_secret_command = ["bws", "secret", "get", "<bitwarden-secret-id>", "--output", "json"]
+client_secret_field = "value"
+```
+
+Set `BWS_ACCESS_TOKEN` for a machine account that can read that secret, then run the same normal `lt` command. The command is executed directly without a shell and only when a token must be minted or renewed. See [CONFIGURATION.md](CONFIGURATION.md) for precedence and command output rules.
+
+On the first command, the CLI requests an app-actor token with the canonical agent scopes, stores only the token and its expiry in `~/.config/linear/credentials.toml`, and continues the command. The client secret is never written to disk or printed. Subsequent commands reuse the cached token. Within five minutes of expiry, the CLI automatically obtains and stores a replacement token using the configured secret provider.
 
 `LINEAR_OAUTH_CLIENT_SECRET` is supported as a generic fallback, but identity-specific secrets are safer when multiple apps share a machine. All machines using one app must request the same canonical scope set or Linear may revoke the other client-credentials tokens.
 

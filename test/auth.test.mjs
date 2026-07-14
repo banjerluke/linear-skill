@@ -8,6 +8,7 @@ import { test } from 'node:test';
 
 const CLI = new URL('../skills/linear/bin/linear.mjs', import.meta.url).pathname;
 const MOCK_FETCH = new URL('./fixtures/mock-linear-fetch.mjs', import.meta.url).href;
+const MOCK_SECRET_COMMAND = new URL('./fixtures/mock-secret-command.mjs', import.meta.url).pathname;
 const CLEAN_HOME = join(tmpdir(), `linear-auth-clean-${process.pid}`);
 const HARNESS_KEYS = [
   'CLAUDECODE',
@@ -195,6 +196,71 @@ token_expiry = "2999-01-01T00:00:00.000Z"
   const migratedCredentials = await readFile(join(home, '.config', 'linear', 'credentials.toml'), 'utf8');
   assert.match(migratedCredentials, /grant_type = "client_credentials"/);
   assert.doesNotMatch(migratedCredentials, /old-refresh-token/);
+});
+
+test('normal commands retrieve client credentials from a configured secret command', async t => {
+  const cwd = await mkdtemp(join(tmpdir(), 'linear-secret-command-config-'));
+  const home = await mkdtemp(join(tmpdir(), 'linear-secret-command-home-'));
+  t.after(() => Promise.all([
+    rm(cwd, { recursive: true, force: true }),
+    rm(home, { recursive: true, force: true }),
+  ]));
+  await writeFile(join(cwd, '.linear.toml'), `[oauth.codex]
+client_id = "codex-client-id"
+client_secret_command = [${JSON.stringify(process.execPath)}, ${JSON.stringify(MOCK_SECRET_COMMAND)}]
+client_secret_field = "value"
+`);
+
+  const args = ['graphql', 'query', '--query', '{ viewer { id } }'];
+  const result = await run(args, cleanEnv({
+    HOME: home,
+    CODEX_THREAD_ID: 'test-thread',
+    MOCK_SECRET_COMMAND_VALUE: 'super-secret',
+    MOCK_LINEAR_CLIENT_ID: 'codex-client-id',
+    MOCK_LINEAR_CLIENT_SECRET: 'super-secret',
+    NODE_OPTIONS: `--import=${MOCK_FETCH}`,
+  }), cwd);
+  assert.equal(result.code, 0);
+  assert.match(result.stderr, /client_secret_command/);
+  assert.doesNotMatch(result.stderr, /super-secret/);
+
+  const credentials = await readFile(join(home, '.config', 'linear', 'credentials.toml'), 'utf8');
+  assert.match(credentials, /grant_type = "client_credentials"/);
+  assert.doesNotMatch(credentials, /super-secret/);
+
+  const cached = await run(args, cleanEnv({
+    HOME: home,
+    CODEX_THREAD_ID: 'test-thread',
+    MOCK_LINEAR_CLIENT_ID: 'codex-client-id',
+    MOCK_LINEAR_CLIENT_SECRET: 'super-secret',
+    NODE_OPTIONS: `--import=${MOCK_FETCH}`,
+  }), cwd);
+  assert.equal(cached.code, 0);
+  assert.doesNotMatch(cached.stderr, /client_secret_command/);
+});
+
+test('secret command parse errors do not expose command output', async t => {
+  const cwd = await mkdtemp(join(tmpdir(), 'linear-secret-command-error-config-'));
+  const home = await mkdtemp(join(tmpdir(), 'linear-secret-command-error-home-'));
+  t.after(() => Promise.all([
+    rm(cwd, { recursive: true, force: true }),
+    rm(home, { recursive: true, force: true }),
+  ]));
+  await writeFile(join(cwd, '.linear.toml'), `[oauth.codex]
+client_id = "codex-client-id"
+client_secret_command = [${JSON.stringify(process.execPath)}, ${JSON.stringify(MOCK_SECRET_COMMAND)}]
+client_secret_field = "missing"
+`);
+
+  const result = await run(['graphql', 'query', '--query', '{ viewer { id } }'], cleanEnv({
+    HOME: home,
+    CODEX_THREAD_ID: 'test-thread',
+    MOCK_SECRET_COMMAND_VALUE: 'must-not-leak',
+    NODE_OPTIONS: `--import=${MOCK_FETCH}`,
+  }), cwd);
+  assert.equal(result.code, 1);
+  assert.match(JSON.parse(result.stderr).error, /did not return JSON with a string "missing" field/);
+  assert.doesNotMatch(result.stderr, /must-not-leak/);
 });
 
 test('auth login --all skips configured identities that already have credentials', async t => {

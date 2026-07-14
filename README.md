@@ -70,7 +70,7 @@ Identity-specific variables such as `CODEX_LINEAR_ACCESS_TOKEN` and `CLAUDE_LINE
 
 OAuth credentials are stored by identity at `~/.config/linear/credentials.toml`. The file is written atomically with user-only permissions.
 
-For private apps used across multiple machines, enable Linear client credentials and set `<IDENTITY>_LINEAR_OAUTH_CLIENT_SECRET` in each machine's environment or secret manager. Any normal command then mints and caches an app token automatically; no `auth login` command or browser callback is needed. The secret is never stored in the credentials file. Client IDs can remain in `.linear.toml` or `<IDENTITY>_LINEAR_OAUTH_CLIENT_ID`.
+For private apps used across multiple machines, enable Linear client credentials and either set `<IDENTITY>_LINEAR_OAUTH_CLIENT_SECRET` or configure `client_secret_command` under `[oauth.<identity>]`. Any normal command then mints and caches an app token automatically; no `auth login` command or browser callback is needed. The secret is never stored in the credentials file. See [skills/linear/CONFIGURATION.md](skills/linear/CONFIGURATION.md) for the Bitwarden Secrets Manager example.
 
 API keys remain supported for users who want actions attributed to their own Linear account. OAuth logins use `actor=app` and are attributed to the selected application identity.
 
@@ -92,12 +92,15 @@ client_id = "<codex-client-id>"
 
 [oauth.claude]
 client_id = "<claude-client-id>"
+# Optional secret-manager command; Bitwarden returns the secret in JSON.value.
+client_secret_command = ["bws", "secret", "get", "<bitwarden-secret-id>", "--output", "json"]
+client_secret_field = "value"
 
 [oauth.cursor]
 client_id = "<cursor-client-id>"
 ```
 
-Additional identities use the same `[oauth.<identity>]` shape. Client IDs are public and may be committed; access tokens, refresh tokens, API keys, and client secrets must not be placed in `.linear.toml`.
+Additional identities use the same `[oauth.<identity>]` shape. Client IDs, secret IDs, and secret commands may be committed; access tokens, refresh tokens, API keys, and client secrets must not be placed in `.linear.toml`.
 
 OAuth client ID precedence is `--client-id`, identity-specific environment variable, identity-specific `.linear.toml`, generic environment variable, then project default. Login fails when none is configured so a named identity cannot silently authorize the bundled generic app. Pass `--use-generic-app` only when that generic identity is intentional.
 

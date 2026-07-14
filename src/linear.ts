@@ -8,6 +8,9 @@ import { homedir } from 'node:os';
 import { createServer } from 'node:http';
 import { createHash, randomBytes } from 'node:crypto';
 import { createInterface } from 'node:readline/promises';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { parse as parseToml } from 'smol-toml';
 import { findConfigPath } from './config.mjs';
 import { getCurrentIssue, resolveIssueReference } from './current-issue.mjs';
 import { uploadLocalFile } from './upload-file.mjs';
@@ -15,12 +18,19 @@ import { uploadLocalFile } from './upload-file.mjs';
 // ═══════════════════════════════ Helpers ═══════════════════════════════
 
 type Opts = Record<string, string | string[] | true>;
+type ClientSecretCommand = {
+  argv: string[];
+  field?: string;
+};
 type Config = {
   path?: string;
   team?: string;
   oauthDefaultClientId?: string;
   oauthClientIds: Record<string, string>;
+  oauthClientSecretCommands: Record<string, ClientSecretCommand>;
 };
+
+const execFileAsync = promisify(execFile);
 
 function die(msg: string): never {
   console.error(JSON.stringify({ error: msg }));
@@ -418,12 +428,60 @@ function configuredOAuthClientId(identity: string, config = getConfig()): string
     || config.oauthDefaultClientId;
 }
 
-function clientCredentialsSecret(identity: string): { value: string; source: string } | null {
+type ClientCredentialsSecretProvider = {
+  source: string;
+  resolve: () => Promise<{ value: string; source: string }>;
+};
+
+function clientCredentialsSecretProvider(identity: string): ClientCredentialsSecretProvider | null {
   const identityKey = identityEnvKey(identity, 'LINEAR_OAUTH_CLIENT_SECRET');
   const identitySecret = process.env[identityKey]?.trim();
-  if (identitySecret) return { value: identitySecret, source: identityKey };
+  if (identitySecret) {
+    return { source: identityKey, resolve: async () => ({ value: identitySecret, source: identityKey }) };
+  }
+
+  const command = getConfig().oauthClientSecretCommands[identity];
+  if (command) {
+    const source = `.linear.toml client_secret_command for identity "${identity}"`;
+    return {
+      source,
+      resolve: async () => {
+        let stdout: string;
+        try {
+          const result = await execFileAsync(command.argv[0], command.argv.slice(1), {
+            encoding: 'utf8',
+            timeout: 15_000,
+            maxBuffer: 1024 * 1024,
+          });
+          stdout = result.stdout;
+        } catch {
+          die(`Client secret command for identity "${identity}" failed while running ${JSON.stringify(command.argv[0])}.`);
+        }
+
+        let value = stdout.trim();
+        if (command.field) {
+          try {
+            const parsed = JSON.parse(stdout) as Record<string, unknown>;
+            const fieldValue = parsed[command.field];
+            if (typeof fieldValue !== 'string') throw new Error('not a string');
+            value = fieldValue.trim();
+          } catch {
+            die(`Client secret command for identity "${identity}" did not return JSON with a string ${JSON.stringify(command.field)} field.`);
+          }
+        }
+        if (!value) die(`Client secret command for identity "${identity}" returned an empty secret.`);
+        return { value, source };
+      },
+    };
+  }
+
   const genericSecret = process.env.LINEAR_OAUTH_CLIENT_SECRET?.trim();
-  if (genericSecret) return { value: genericSecret, source: 'LINEAR_OAUTH_CLIENT_SECRET' };
+  if (genericSecret) {
+    return {
+      source: 'LINEAR_OAUTH_CLIENT_SECRET',
+      resolve: async () => ({ value: genericSecret, source: 'LINEAR_OAUTH_CLIENT_SECRET' }),
+    };
+  }
   return null;
 }
 
@@ -477,19 +535,19 @@ async function getAuthWithRefresh(identity: string): Promise<Auth> {
 
   const c = existsSync(CREDENTIALS_PATH) ? readFileSync(CREDENTIALS_PATH, 'utf-8') : '';
   const profile = readSection(c, profileSection(identity));
-  const secret = clientCredentialsSecret(identity);
-  const clientId = secret ? configuredOAuthClientId(identity) : undefined;
-  if (secret && !clientId) {
-    die(`Client credentials secret ${secret.source} is set, but no OAuth client ID is configured for identity "${identity}".`);
+  const secretProvider = clientCredentialsSecretProvider(identity);
+  const clientId = secretProvider ? configuredOAuthClientId(identity) : undefined;
+  if (secretProvider && !clientId) {
+    die(`Client credentials secret ${secretProvider.source} is configured, but no OAuth client ID is configured for identity "${identity}".`);
   }
   if (profile.access_token) {
-    if (secret && profile.grant_type !== 'client_credentials') {
-      return mintClientCredentials(identity, clientId!, secret);
+    if (secretProvider && profile.grant_type !== 'client_credentials') {
+      return mintClientCredentials(identity, clientId!, await secretProvider.resolve());
     }
     if (profile.token_expiry && new Date(profile.token_expiry).getTime() - Date.now() < 5 * 60 * 1000) {
       if (profile.grant_type === 'client_credentials') {
-        if (!secret) die(`Cannot renew client credentials for identity "${identity}": set ${identityEnvKey(identity, 'LINEAR_OAUTH_CLIENT_SECRET')}.`);
-        return mintClientCredentials(identity, clientId!, secret);
+        if (!secretProvider) die(`Cannot renew client credentials for identity "${identity}": configure ${identityEnvKey(identity, 'LINEAR_OAUTH_CLIENT_SECRET')} or client_secret_command.`);
+        return mintClientCredentials(identity, clientId!, await secretProvider.resolve());
       }
       if (!profile.refresh_token || !profile.client_id) die(`Cannot refresh identity "${identity}": missing refresh_token or client_id.`);
       const tokens = await refreshAccessToken(profile.refresh_token, profile.client_id);
@@ -503,7 +561,7 @@ async function getAuthWithRefresh(identity: string): Promise<Auth> {
   const identityEnvAuth = getIdentityEnvAuth(identity);
   if (identityEnvAuth) return identityEnvAuth;
 
-  if (secret) return mintClientCredentials(identity, clientId!, secret);
+  if (secretProvider) return mintClientCredentials(identity, clientId!, await secretProvider.resolve());
 
   const auth = getAuth(identity);
   if ('apiKey' in auth) return auth;
@@ -527,20 +585,42 @@ async function getAuthWithRefresh(identity: string): Promise<Auth> {
 
 function getConfig(): Config {
   const p = findConfigPath();
-  if (!p) return { oauthClientIds: {} };
+  if (!p) return { oauthClientIds: {}, oauthClientSecretCommands: {} };
   const c = readFileSync(p, 'utf-8');
-  const oauth = readSection(c, 'oauth');
+  let parsed: Record<string, any>;
+  try {
+    parsed = parseToml(c) as Record<string, any>;
+  } catch {
+    die(`Invalid TOML in ${p}.`);
+  }
+  const oauth = parsed.oauth && typeof parsed.oauth === 'object' ? parsed.oauth : {};
   const oauthClientIds: Record<string, string> = {};
-  for (const match of c.matchAll(/^\[oauth\.([a-z][a-z0-9_-]*)\]$/gm)) {
-    const identity = normalizeIdentity(match[1]);
-    const section = readSection(c, `oauth.${identity}`);
-    if (section.client_id) oauthClientIds[identity] = section.client_id;
+  const oauthClientSecretCommands: Record<string, ClientSecretCommand> = {};
+  for (const [rawIdentity, section] of Object.entries(oauth)) {
+    if (rawIdentity === 'default_client_id' || !section || typeof section !== 'object' || Array.isArray(section)) continue;
+    const identity = normalizeIdentity(rawIdentity);
+    if (typeof section.client_id === 'string' && section.client_id.trim()) oauthClientIds[identity] = section.client_id.trim();
+    if (section.client_secret_command !== undefined) {
+      if (!Array.isArray(section.client_secret_command)
+        || section.client_secret_command.length === 0
+        || !section.client_secret_command.every((part: unknown) => typeof part === 'string' && part.length > 0)) {
+        die(`oauth.${identity}.client_secret_command must be a non-empty array of strings in ${p}.`);
+      }
+      if (section.client_secret_field !== undefined && (typeof section.client_secret_field !== 'string' || !section.client_secret_field.trim())) {
+        die(`oauth.${identity}.client_secret_field must be a non-empty string in ${p}.`);
+      }
+      oauthClientSecretCommands[identity] = {
+        argv: section.client_secret_command,
+        field: section.client_secret_field?.trim(),
+      };
+    }
   }
   return {
     path: p,
-    team: c.match(/^team_id\s*=\s*"(.+?)"/m)?.[1],
-    oauthDefaultClientId: oauth.default_client_id,
+    team: typeof parsed.team_id === 'string' ? parsed.team_id : undefined,
+    oauthDefaultClientId: typeof oauth.default_client_id === 'string' ? oauth.default_client_id : undefined,
     oauthClientIds,
+    oauthClientSecretCommands,
   };
 }
 
@@ -1738,8 +1818,8 @@ function configuredIdentityAuthSource(identity: string): string | null {
   if (process.env[identityEnvKey(identity, 'LINEAR_API_KEY')]?.trim()) {
     return identityEnvKey(identity, 'LINEAR_API_KEY');
   }
-  const secret = clientCredentialsSecret(identity);
-  if (secret) return `${secret.source} (automatic client credentials)`;
+  const secretProvider = clientCredentialsSecretProvider(identity);
+  if (secretProvider) return `${secretProvider.source} (automatic client credentials)`;
   return null;
 }
 

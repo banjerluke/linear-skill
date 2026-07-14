@@ -18,12 +18,14 @@ client_id = "<codex-client-id>"
 
 [oauth.claude]
 client_id = "<claude-client-id>"
+client_secret_command = ["bws", "secret", "get", "<bitwarden-secret-id>", "--output", "json"]
+client_secret_field = "value"
 
 [oauth.cursor]
 client_id = "<cursor-client-id>"
 ```
 
-Additional identities use `[oauth.<identity>]` with a `client_id`. Client IDs are public and may be committed. Never put access tokens, refresh tokens, API keys, or client secrets in `.linear.toml`.
+Additional identities use `[oauth.<identity>]` with a `client_id`. Client IDs, secret IDs, and secret commands may be committed. Never put access tokens, refresh tokens, API keys, or client secrets in `.linear.toml`.
 
 Client credentials secrets must come from the environment or a secret manager:
 
@@ -33,8 +35,10 @@ export CLAUDE_LINEAR_OAUTH_CLIENT_SECRET="<claude-secret>"
 export CURSOR_LINEAR_OAUTH_CLIENT_SECRET="<cursor-secret>"
 ```
 
-The generic `LINEAR_OAUTH_CLIENT_SECRET` is a fallback for the selected identity. An identity-specific secret takes precedence. When a secret and client ID are configured, any normal CLI command authenticates automatically; `auth login` is not required.
+For Bitwarden Secrets Manager, authenticate `bws` with a narrowly scoped machine account and set `BWS_ACCESS_TOKEN` in the machine environment. `bws secret get` returns JSON, so `client_secret_field = "value"` selects the secret value. Other secret commands may omit `client_secret_field` when they print only the secret.
 
-OAuth client ID precedence is `--client-id`, `<IDENTITY>_LINEAR_OAUTH_CLIENT_ID`, identity-specific `.linear.toml`, `LINEAR_OAUTH_CLIENT_ID`, then `[oauth].default_client_id`. The bundled generic app is selected only by the explicit `--use-generic-app` flag.
+The CLI executes `client_secret_command` directly as the configured argument array, never through a shell. It trims the result, does not log it, and invokes the command only when it must mint or renew a Linear token. Identity-specific environment secrets take precedence over the configured command; the generic `LINEAR_OAUTH_CLIENT_SECRET` is the final fallback. When a secret provider and client ID are configured, any normal CLI command authenticates automatically; `auth login` is not required.
+
+OAuth client ID precedence is `--client-id`, `<IDENTITY>_LINEAR_OAUTH_CLIENT_ID`, identity-specific `.linear.toml`, `LINEAR_OAUTH_CLIENT_ID`, then `[oauth].default_client_id`. Client secret precedence is `<IDENTITY>_LINEAR_OAUTH_CLIENT_SECRET`, identity-specific `client_secret_command`, then `LINEAR_OAUTH_CLIENT_SECRET`. The bundled generic app is selected only by the explicit `--use-generic-app` flag.
 
 Commands that accept `--team` default to `team_id` when it is configured.
