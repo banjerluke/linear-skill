@@ -38,6 +38,15 @@ async function run(args, env) {
   return { code, stdout, stderr };
 }
 
+test('auth login --help explains assisted login without starting OAuth', async () => {
+  const result = await run(['auth', 'login', '--help'], cleanEnv());
+  assert.equal(result.code, 0);
+  assert.match(result.stdout, /Keep the\s+process running/);
+  assert.match(result.stdout, /full localhost callback URL/);
+  assert.match(result.stdout, /Never ask the user.*password, API key, or access token/);
+  assert.doesNotMatch(result.stderr, /linear\.app\/oauth\/authorize/);
+});
+
 test('detects Codex and uses its identity-specific token', async () => {
   const result = await run(['auth', 'status'], cleanEnv({ CODEX_THREAD_ID: 'test-thread', CODEX_LINEAR_ACCESS_TOKEN: 'lin_oauth_test' }));
   assert.equal(result.code, 0);
@@ -129,7 +138,7 @@ function readLoginUrl(child) {
     child.stderr.on('data', chunk => {
       stderr += chunk;
       const match = stderr.match(/https:\/\/linear\.app\/oauth\/authorize\?\S+/);
-      if (!match || !stderr.includes('Waiting for callback')) return;
+      if (!match || (!stderr.includes('Waiting for callback') && !stderr.includes('Callback URL:'))) return;
       clearTimeout(timeout);
       resolve(new URL(match[0]));
     });
@@ -155,4 +164,34 @@ test('PKCE login URL uses an app actor and no client secret', async t => {
   assert.equal(url.searchParams.get('code_challenge_method'), 'S256');
   assert.ok(url.searchParams.get('code_challenge'));
   assert.equal(url.searchParams.has('client_secret'), false);
+});
+
+test('login accepts a pasted callback while waiting on localhost', async t => {
+  const port = 45000 + Math.floor(Math.random() * 1000);
+  const child = spawn(CLI, ['auth', 'login', '--identity', 'test', '--client-id', 'public-client-id', '--port', String(port)], {
+    env: cleanEnv(),
+  });
+  t.after(() => child.kill('SIGTERM'));
+
+  const url = await readLoginUrl(child);
+  assert.equal(url.searchParams.get('redirect_uri'), `http://localhost:${port}/callback`);
+
+  child.stdin.write(`http://localhost:${port}/callback?code=test-code&state=wrong-state\n`);
+  const [code] = await once(child, 'exit');
+  assert.equal(code, 1);
+});
+
+test('login still accepts an HTTP callback on localhost', async t => {
+  const port = 46000 + Math.floor(Math.random() * 1000);
+  const child = spawn(CLI, ['auth', 'login', '--identity', 'test', '--client-id', 'public-client-id', '--port', String(port)], {
+    env: cleanEnv(),
+  });
+  t.after(() => child.kill('SIGTERM'));
+
+  await readLoginUrl(child);
+  const response = await fetch(`http://localhost:${port}/callback?code=test-code&state=wrong-state`);
+  assert.equal(response.status, 400);
+  assert.equal(await response.text(), 'State mismatch');
+  const [code] = await once(child, 'exit');
+  assert.equal(code, 1);
 });

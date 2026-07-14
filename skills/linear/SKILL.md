@@ -3,98 +3,22 @@ name: linear
 description: >
   This skill should be used when the user asks about Linear issues, projects,
   initiatives, milestones, documents, or any issue tracking tasks. Triggers on
-  mentions of "Linear", issue identifiers like "SM-123", "create an issue",
-  "update the issue", "list issues", "check project status", "add a comment",
-  "search issues", or any issue/project management workflow.
+  mentions of "Linear", issue identifiers like "SM-123", or any issue/project management workflow.
 license: MIT
 ---
 
 # Linear API Tool
 
-CLI tool wrapping `@linear/sdk` for Linear issue tracking.
-
-**Requirements:** Node.js 20+. A custom Linear OAuth app client ID or Linear API token is optional because the skill includes a public OAuth fallback.
+CLI tool wrapping `@linear/sdk` for Linear issue tracking. Requires Node 20+.
 
 **IMPORTANT - Path Resolution:**
-This skill can be installed in different locations. Before executing any commands, determine the skill directory based on where you loaded this SKILL.md file, and use that path in all commands below. Replace `$SKILL_DIR` with the actual discovered path.
+Before executing any commands, determine the skill directory based on where you loaded this SKILL.md file. Replace `$SKILL_DIR` with the actual discovered path.
 
 **Invocation:** `$SKILL_DIR/bin/linear.mjs` (executable with shebang, no `node` prefix needed)
 
 `lt` is used throughout this doc as shorthand for the full invocation path.
 
-**Config:** Reads `.linear.toml` from CWD or the Git repository root for `team_id` and OAuth client ID overrides. Auth from `~/.config/linear/credentials.toml`.
-
-## Authentication
-
-Supports two auth methods:
-
-1. **OAuth with PKCE (recommended)** — No client secret is required. Actions are attributed to the selected app identity using `actor=app`.
-2. **Env Token** — API keys act as the Linear user; OAuth access tokens retain the actor encoded at authorization. Set an identity-specific token such as `CODEX_LINEAR_ACCESS_TOKEN` or `CLAUDE_LINEAR_ACCESS_TOKEN`, or use the generic `LINEAR_ACCESS_TOKEN` / `LINEAR_API_KEY` fallback.
-   - If `LINEAR_API_KEY` starts with `lin_oaut`, the tool treats it as an OAuth access token automatically.
-
-The CLI keeps separate credential profiles for agent identities. It detects Codex, Claude Code, and Cursor Agent when their runtime markers are present. Pass `--identity <name>` or set `LINEAR_AGENT_IDENTITY` when running manually, nesting one agent inside another, or using another harness. Explicit identity selection always wins.
-
-### OAuth Setup
-
-Create one Linear OAuth application for each identity that should appear separately in Linear. For example, create `Codex`, `Claude Code`, and `Cursor` applications with their own names, icons, and client IDs.
-
-1. Go to Linear Settings → API → OAuth Applications → New
-2. Set the callback URL to `http://localhost:41549/callback`
-3. Configure client IDs in `.linear.toml` or pass `--client-id` explicitly
-4. Run `lt auth login --identity codex`, `lt auth login --identity claude`, and `lt auth login --identity cursor`
-5. Open each printed URL and authorize the app installation
-6. Tokens are saved by identity in `~/.config/linear/credentials.toml` with automatic refresh
-
-```toml
-[oauth.codex]
-client_id = "<codex-client-id>"
-
-[oauth.claude]
-client_id = "<claude-client-id>"
-
-[oauth.cursor]
-client_id = "<cursor-client-id>"
-```
-
-Use `[oauth] default_client_id = "<id>"` as a project-level fallback for identities without their own section. The bundled neutral public OAuth app is the final fallback.
-
-The client ID is public. PKCE protects the authorization-code exchange, so no client secret is supplied or stored. To make an app assignable or mentionable, add the corresponding scopes during login: `--scope read --scope write --scope app:assignable --scope app:mentionable`.
-
-### Auth Commands
-
-```
-lt auth login --identity codex --client-id <id>
-lt auth login --identity claude --client-id <id>
-lt auth login --identity cursor --client-id <id>
-lt auth status [--identity <name>]
-lt auth list
-lt auth logout [--identity <name>]
-```
-
-## Project Configuration
-
-The complete `.linear.toml` schema is:
-
-```toml
-# Optional default for commands that accept --team.
-team_id = "ENG"
-
-[oauth]
-default_client_id = "<project-default-client-id>"
-
-[oauth.codex]
-client_id = "<codex-client-id>"
-
-[oauth.claude]
-client_id = "<claude-client-id>"
-
-[oauth.cursor]
-client_id = "<cursor-client-id>"
-```
-
-Additional identities use `[oauth.<identity>]` with a `client_id`. Client IDs are public and may be committed. Never put access tokens, refresh tokens, API keys, or client secrets in `.linear.toml`.
-
-Client ID precedence: `--client-id`, `<IDENTITY>_LINEAR_OAUTH_CLIENT_ID`, identity-specific `.linear.toml`, `LINEAR_OAUTH_CLIENT_ID`, `[oauth].default_client_id`, bundled public app.
+Before authentication, OAuth setup, login, or credential troubleshooting, read [AUTHENTICATION.md](AUTHENTICATION.md). Before creating or changing `.linear.toml`, read [CONFIGURATION.md](CONFIGURATION.md).
 
 ## Output Format
 
@@ -140,7 +64,7 @@ lt issue search --query "search term" [--limit 20]
 
 `issue search` does full-text search across all fields (title, description, comments). `issue list --query` filters by title only.
 
-`issue current` is local and does not require authentication. It extracts an identifier such as `ENG-123` from the current Git branch. Commands never infer the current issue from an omitted argument; pass the literal reference `current` to opt in.
+`issue current` is a local operation that extracts an identifier such as `ENG-123` from the current Git branch. Commands never infer the current issue from an omitted argument; pass the literal reference `current` to opt in.
 
 ### Prefer Stdin for Markdown/Text Bodies
 
@@ -369,20 +293,11 @@ lt graphql query --query '{ viewer { id name } }' [--variables '{"key":"value"}'
 ## Notes
 
 - `lt` = `$SKILL_DIR/bin/linear.mjs`
-- Identity selection precedence: `--identity`, `LINEAR_AGENT_IDENTITY`, then conservative Codex/Claude Code/Cursor detection
-- Auth precedence: generic `LINEAR_ACCESS_TOKEN` / `LINEAR_API_KEY` overrides, refreshable identity profile, identity-specific env fallback
 - Priority: 0=None, 1=Urgent, 2=High, 3=Normal, 4=Low
 - `issue get` and `issue read` include comments by default; use `--no-comments` to suppress
 - Project states: `planned`, `started`, `paused`, `completed`, `canceled`, `backlog`
 - Initiative statuses: `planned`, `active`, `completed`, `paused`
 - Health values: `onTrack`, `atRisk`, `offTrack`
 - All list commands support `--limit N` (default 50) and `--cursor X` for pagination
-- `--team` defaults to `team_id` from `.linear.toml` when available
 - Errors output JSON to stderr: `{"error":"message"}`
 - **Linear Markdown normalization:** Linear wraps URLs in angle brackets on save — `[text](url)` becomes `[text](<url>)`. Always pre-wrap URLs when writing Markdown links: `[text](<url>)`. This prevents content from changing after save, which would invalidate hashline anchors.
-
-## Issue Workflow
-
-- **Starting work**: `lt issue update SM-123 --state "In Progress"`
-- **Code complete**: Do NOT mark as "Done" yet. Wait for user confirmation.
-- **User confirms**: `lt issue update SM-123 --state "Done"` + `lt comment create --issue SM-123 --body "Done: [what was done]"`

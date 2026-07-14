@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { createServer } from 'node:http';
 import { createHash, randomBytes } from 'node:crypto';
+import { createInterface } from 'node:readline/promises';
 import { findConfigPath } from './config.mjs';
 import { getCurrentIssue, resolveIssueReference } from './current-issue.mjs';
 import { uploadLocalFile } from './upload-file.mjs';
@@ -1607,6 +1608,33 @@ cmd['graphql.query'] = async (client, _pos, opts) => {
 
 // ─── Auth ───
 
+function authLoginHelp(): void {
+  console.log(`Usage: linear auth login [options]
+
+Authenticate an agent identity with Linear using OAuth and PKCE.
+
+The command prints an authorization URL and waits for the callback. Keep the
+process running while the user authorizes the app. If the browser can reach the
+CLI's localhost server, login completes automatically. Otherwise, ask the user
+to copy the full localhost callback URL from the browser address bar and write
+it to this process's stdin.
+
+Options:
+  --identity <name>   Credential identity (for example: codex or claude)
+  --client-id <id>    Linear OAuth application client ID
+  --scope <scope>     OAuth scope; repeat for multiple scopes (default: read, write)
+  --port <port>       Local callback port (default: 41549)
+  --help              Show this help
+
+Agent workflow:
+  1. Start this command in a long-lived interactive process.
+  2. Give the printed authorization URL to the user.
+  3. If the localhost redirect fails, ask for the full URL in their address bar.
+  4. Write that URL to the waiting process, then verify with auth status.
+
+Never ask the user for their Linear password, API key, or access token.`);
+}
+
 async function authLogin(opts: Opts): Promise<void> {
   const identity = resolveIdentity(opts);
   const config = getConfig();
@@ -1637,27 +1665,73 @@ async function authLogin(opts: Opts): Promise<void> {
   }).toString();
 
   console.error(`\nAuthenticating identity "${identity.name}" (${identity.source}).`);
-  console.error(`Open this URL in your browser to authorize:\n\n  ${authorizeUrl.toString()}\n\nWaiting for callback on port ${port}...`);
+  console.error(`Open this URL in your browser to authorize:\n\n  ${authorizeUrl.toString()}\n`);
+  console.error(`Waiting for callback on port ${port}...`);
+  console.error('If the browser cannot reach localhost, copy its full URL from the address bar and paste it here.');
+
+  const parseCallback = (url: URL): string => {
+    if (url.origin !== `http://localhost:${port}` || url.pathname !== '/callback') {
+      throw new Error(`Unexpected callback URL. Expected ${redirectUri}.`);
+    }
+    const err = url.searchParams.get('error');
+    if (err) throw new Error('Authorization denied: ' + err);
+    if (url.searchParams.get('state') !== state) throw new Error('State mismatch');
+    const authCode = url.searchParams.get('code');
+    if (!authCode) throw new Error('No authorization code received');
+    return authCode;
+  };
 
   const code = await new Promise<string>((resolve, reject) => {
-    const timeout = setTimeout(() => { srv.close(); reject(new Error('Timed out waiting for authorization (5 min)')); }, 5 * 60 * 1000);
+    let settled = false;
+    const readline = createInterface({ input: process.stdin, output: process.stderr });
     const srv = createServer((req, res) => {
       const url = new URL(req.url!, `http://localhost:${port}`);
       if (url.pathname !== '/callback') { res.writeHead(404); res.end(); return; }
-      const err = url.searchParams.get('error');
-      if (err) { res.writeHead(200); res.end('Authorization denied: ' + err); clearTimeout(timeout); srv.close(); reject(new Error('Authorization denied: ' + err)); return; }
-      const returnedState = url.searchParams.get('state');
-      if (returnedState !== state) { res.writeHead(400); res.end('State mismatch'); clearTimeout(timeout); srv.close(); reject(new Error('State mismatch')); return; }
-      const authCode = url.searchParams.get('code');
-      if (!authCode) { res.writeHead(400); res.end('No code'); clearTimeout(timeout); srv.close(); reject(new Error('No authorization code received')); return; }
-      res.writeHead(200, { 'Content-Type': 'text/html' });
-      res.end('<h2>Authorization successful!</h2><p>You can close this tab.</p>');
-      clearTimeout(timeout);
-      srv.close();
-      resolve(authCode);
+      try {
+        const authCode = parseCallback(url);
+        res.writeHead(200, { 'Content-Type': 'text/html' });
+        res.end('<h2>Authorization successful!</h2><p>You can close this tab.</p>');
+        finish(null, authCode);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        res.writeHead(400); res.end(message);
+        finish(error instanceof Error ? error : new Error(message));
+      }
     });
-    srv.once('error', reject);
+    const timeout = setTimeout(() => finish(new Error('Timed out waiting for authorization (5 min)')), 5 * 60 * 1000);
+
+    const finish = (error: Error | null, authCode?: string) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      readline.close();
+      srv.close();
+      if (error) reject(error);
+      else resolve(authCode!);
+    };
+
+    srv.once('error', error => {
+      console.error(`Could not listen on localhost:${port} (${error.message}). Paste the callback URL instead.`);
+    });
     srv.listen(port, 'localhost');
+
+    readline.question('\nCallback URL (or wait for the browser redirect): ').then(callback => {
+      if (settled || !callback.trim()) return;
+      let url: URL;
+      try {
+        url = new URL(callback.trim());
+      } catch {
+        finish(new Error('Invalid callback URL. Paste the full URL beginning with http://localhost.'));
+        return;
+      }
+      try {
+        finish(null, parseCallback(url));
+      } catch (error) {
+        finish(error instanceof Error ? error : new Error(String(error)));
+      }
+    }).catch(error => {
+      if (!settled) console.error(`Callback URL input is unavailable (${error instanceof Error ? error.message : String(error)}); waiting for the browser redirect.`);
+    });
   });
 
   // Exchange code for tokens
@@ -1790,6 +1864,7 @@ async function main() {
 
   // Auth commands don't need an existing token
   if (resource === 'auth') {
+    if (action === 'login' && oBool(opts, 'help')) return authLoginHelp();
     if (action === 'login') return authLogin(opts);
     if (action === 'status') return authStatus(opts);
     if (action === 'list') return authList();
