@@ -9,9 +9,9 @@
     "check": "node --check skills/linear/bin/linear.mjs"
   },
   "dependencies": {
-    "@linear/sdk": "^37.0.0"
+    "@linear/sdk": "^88.1.0"
   },
   "devDependencies": {
-    "esbuild": "^0.25.0"
+    "esbuild": "^0.28.1"
   }
 }
